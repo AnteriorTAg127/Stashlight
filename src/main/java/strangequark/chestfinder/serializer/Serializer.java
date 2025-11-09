@@ -49,8 +49,8 @@ public class Serializer {
         JsonArray entry = new JsonArray();
         entry.add(String.valueOf(Registries.ITEM.getId(stack.getItem()).getPath()));
 
-
         ContainerComponent container = stack.get(DataComponentTypes.CONTAINER);
+        
         if (container == null) {
             entry.add(stack.getCount());
         } else {

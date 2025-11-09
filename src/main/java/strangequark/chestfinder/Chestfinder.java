@@ -12,6 +12,7 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.registry.Registries;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
@@ -83,7 +84,7 @@ public class ChestFinder implements ClientModInitializer {
             BlockState state = client.world.getBlockState(pos);
             Block block = state.getBlock();
             int[] posArray = new int[]{pos.getX(), pos.getY(), pos.getZ()};
-            serializer.saveContainer(dimension, block.getName().getString(), posArray, containerStacks);
+            serializer.saveContainer(dimension, String.valueOf(Registries.ITEM.getId(block.asItem()).getPath()), posArray, containerStacks);
             lastOpened.clear();
         }
     }
