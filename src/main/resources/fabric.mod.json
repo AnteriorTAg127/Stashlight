@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "chestfinder",
+  "version": "${version}",
+  "name": "Chest Finder",
+  "description": "Caches chest contents and lets you search through them via an in-game menu.",
+  "authors": ["Strange Quark"],
+  "contact": {
+    "homepage": "https://fabricmc.net/",
+    "sources": "https://github.com/FabricMC/fabric-example-mod"
+  },
+  "license": "ARR",
+  "icon": "assets/chestfinder/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["strangequark.chestfinder.Chestfinder"]
+  },
+  "mixins": [],
+  "depends": {
+    "fabricloader": ">=0.17.3",
+    "minecraft": "~1.21.10",
+    "java": ">=21",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "another-mod": "*"
+  }
+}
