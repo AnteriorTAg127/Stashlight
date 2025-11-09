@@ -13,7 +13,7 @@
   "icon": "assets/chestfinder/icon.png",
   "environment": "*",
   "entrypoints": {
-    "main": ["strangequark.chestfinder.Chestfinder"]
+    "client": ["strangequark.chestfinder.ChestFinder"]
   },
   "mixins": [],
   "depends": {
