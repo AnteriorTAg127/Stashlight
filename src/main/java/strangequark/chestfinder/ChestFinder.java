@@ -39,13 +39,13 @@ public class ChestFinder implements ClientModInitializer {
         UseBlockCallback.EVENT.register(this::onBlockUsed);
         ScreenEvents.AFTER_INIT.register(this::onScreenInit);
 
-        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
-            serializer = new Serializer(Init.getFileName());
-        });
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) ->
+                serializer = new Serializer(Init.getFileName())
+        );
 
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
-            serializer = null;
-        });
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
+                serializer = null
+        );
     }
 
     private ActionResult onBlockUsed(PlayerEntity playerEntity, World world, Hand hand, BlockHitResult blockHitResult) {
