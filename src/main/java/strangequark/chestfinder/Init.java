@@ -11,23 +11,19 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 public final class Init {
-    public static Path ROOT;
+    private static Path ROOT;
 
     public static void init() {
         if (FabricLoader.getInstance().getEnvironmentType() != EnvType.CLIENT) {
             return;
         }
 
-        MinecraftClient client = MinecraftClient.getInstance();
-
-        Path root = FabricLoader.getInstance()
+        ROOT = FabricLoader.getInstance()
                 .getGameDir()
                 .resolve("chestfinder_cache");
 
-        ROOT = root;
-
         try {
-            Files.createDirectories(root);
+            Files.createDirectories(ROOT);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -36,30 +32,23 @@ public final class Init {
     public static Path getFileName() {
         MinecraftClient client = MinecraftClient.getInstance();
         String fileName;
-
-        ChestFinder.LOGGER.info("isInSingleplayer {}", client.isInSingleplayer());
-
+        
         if (client.isInSingleplayer()) {
-            if (client.getServer() == null) {
-                return null;
-            }
+            if (client.getServer() == null) return null;
 
             String id = client.getServer()
                     .getSaveProperties()
                     .getLevelName()
                     .replace(' ', '_');
+
             fileName = id + ".json";
-            ChestFinder.LOGGER.info("id {}", id);
         } else {
             ServerInfo info = client.getCurrentServerEntry();
-            if (info == null) {
-                return null;
-            }
+            if (info == null) return null;
+
             String norm = info.address.replace(':', '_');
             fileName = "MP_" + norm + ".json";
         }
-
-        ChestFinder.LOGGER.info("filename {}", fileName);
 
         return ROOT.resolve(fileName);
     }
