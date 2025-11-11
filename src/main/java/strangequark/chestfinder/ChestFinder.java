@@ -28,7 +28,7 @@ import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import strangequark.chestfinder.repository.ContainerRepository;
-import strangequark.chestfinder.search.SearchScreen;
+import strangequark.chestfinder.search.SearchScreenOwo;
 import strangequark.chestfinder.serializer.Serializer;
 
 import java.util.ArrayDeque;
@@ -60,7 +60,7 @@ public class ChestFinder implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (searchKey.wasPressed()) {
-                client.setScreen(new SearchScreen(repository));
+                client.setScreen(new SearchScreenOwo(repository));
             }
         });
 
