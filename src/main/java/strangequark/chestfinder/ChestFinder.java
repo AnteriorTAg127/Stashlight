@@ -5,10 +5,14 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.BlockWithEntity;
+import net.minecraft.block.ChestBlock;
+import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.block.enums.ChestType;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen;
@@ -24,6 +28,7 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +55,7 @@ public class ChestFinder implements ClientModInitializer {
         Init.init();
         UseBlockCallback.EVENT.register(this::onBlockUsed);
         ScreenEvents.AFTER_INIT.register(this::onScreenInit);
+        PlayerBlockBreakEvents.AFTER.register(this::onBlockBreak);
 
         searchKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "Search",
@@ -73,6 +79,10 @@ public class ChestFinder implements ClientModInitializer {
             serializer = null;
             repository = null;
         });
+    }
+
+    private void onBlockBreak(World world, PlayerEntity playerEntity, BlockPos blockPos, BlockState blockState, @Nullable BlockEntity blockEntity) {
+        LOGGER.info("Block breaked state {}", blockState);
     }
 
     private ActionResult onBlockUsed(PlayerEntity playerEntity, World world, Hand hand, BlockHitResult blockHitResult) {
@@ -106,10 +116,29 @@ public class ChestFinder implements ClientModInitializer {
         String dimension = client.world.getRegistryKey().getValue().getPath();
 
         if (!lastOpened.isEmpty()) {
-            BlockPos pos = lastOpened.pop();
-            Block block = client.world.getBlockState(pos).getBlock();
-            repository.save(dimension, Registries.BLOCK.getId(block).getPath(), pos, containerStacks);
+            BlockPos rawPos = lastOpened.pop();
+            BlockPos finalPos = getNormalizedPos(client.world, rawPos);
+            Block block = client.world.getBlockState(finalPos).getBlock();
+            repository.save(dimension, Registries.BLOCK.getId(block).getPath(), finalPos, containerStacks);
             lastOpened.clear();
         }
+    }
+
+    private BlockPos getNormalizedPos(World world, BlockPos pos) {
+        BlockState state = world.getBlockState(pos);
+
+        // Only Chests (and Trapped Chests) can be double
+        if (state.getBlock() instanceof ChestBlock) {
+            ChestType type = state.get(ChestBlock.CHEST_TYPE);
+
+            // If we clicked the RIGHT half, we want to swap to the LEFT half's position
+            // so the data always stays on the same block.
+            if (type == ChestType.RIGHT) {
+                net.minecraft.util.math.Direction facing = state.get(ChestBlock.FACING);
+                // The "Left" half is always Counter-Clockwise from the "Right" half's facing direction
+                return pos.offset(facing.rotateYCounterclockwise());
+            }
+        }
+        return pos;
     }
 }

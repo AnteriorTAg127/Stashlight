@@ -14,15 +14,17 @@ public class ContainerItemComponent extends StackLayout {
     }
 
     protected ContainerItemComponent(ItemStack stack, int count) {
-        super(Sizing.fixed(16), Sizing.fixed(16));
-        
-        ItemComponent itemComponent = Components.item(stack);
-        ScalableLabelComponent countLabel = ScalableLabelComponent.of(Text.literal(String.valueOf(count))).scale(0.6f);
+        super(Sizing.fixed(24), Sizing.fixed(24));
 
-        countLabel.positioning(Positioning.relative(100, 100));
+        ItemComponent itemComponent = (ItemComponent) Components.item(stack).setTooltipFromStack(true).showOverlay(true).sizing(Sizing.fill(80));
+        ScalableLabelComponent countLabel = ScalableLabelComponent.of(Text.literal(String.valueOf(count))).scale(0.75f);
 
-        this.surface(Surface.flat(0x33000000)).alignment(HorizontalAlignment.CENTER, VerticalAlignment.CENTER);
+        countLabel.positioning(Positioning.relative(90, 90));
+
+        this.surface(Surface.flat(0x55888888)).alignment(HorizontalAlignment.CENTER, VerticalAlignment.CENTER);
         this.child(itemComponent);
-        this.child(countLabel);
+        if (count > 1) {
+            this.child(countLabel);
+        }
     }
 }
