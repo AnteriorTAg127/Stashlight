@@ -23,7 +23,7 @@ public class ContainerRepository {
         this.serializer = serializer;
     }
 
-    public void save(String dimension, String containerName, BlockPos pos, List<ItemStack> containerStacks) {
+    public void add(String dimension, String containerName, BlockPos pos, List<ItemStack> containerStacks) {
         cachedJson = serializer.read();
         JsonObject dimObj = cachedJson.has(dimension) ? cachedJson.getAsJsonObject(dimension) : new JsonObject();
         JsonObject chestJson = mapper.toJson(containerName, containerStacks);
@@ -33,6 +33,26 @@ public class ContainerRepository {
         cachedJson.add(dimension, dimObj);
         serializer.write(cachedJson);
         cachedItems = null;
+    }
+
+    public void remove(String dimension, BlockPos pos) {
+        cachedJson = serializer.read();
+        JsonObject dimObj = cachedJson.has(dimension) ? cachedJson.getAsJsonObject(dimension) : null;
+        if (dimObj == null) {
+            return;
+        }
+        String key = mapper.serializePos(pos);
+
+        if (dimObj.has(key)) {
+            dimObj.remove(key);
+
+            if (dimObj.isEmpty()) {
+                cachedJson.remove(dimension);
+            }
+
+            serializer.write(cachedJson);
+            cachedItems = null;
+        }
     }
 
 

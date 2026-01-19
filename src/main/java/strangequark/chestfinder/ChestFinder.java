@@ -82,7 +82,10 @@ public class ChestFinder implements ClientModInitializer {
     }
 
     private void onBlockBreak(World world, PlayerEntity playerEntity, BlockPos blockPos, BlockState blockState, @Nullable BlockEntity blockEntity) {
-        LOGGER.info("Block breaked state {}", blockState);
+        if (repository == null) return;
+        BlockPos targetPos = getNormalizedPos(blockState, blockPos);
+        String dimension = world.getRegistryKey().getValue().getPath();
+        repository.remove(dimension, targetPos);
     }
 
     private ActionResult onBlockUsed(PlayerEntity playerEntity, World world, Hand hand, BlockHitResult blockHitResult) {
@@ -117,17 +120,14 @@ public class ChestFinder implements ClientModInitializer {
 
         if (!lastOpened.isEmpty()) {
             BlockPos rawPos = lastOpened.pop();
-            BlockPos finalPos = getNormalizedPos(client.world, rawPos);
+            BlockPos finalPos = getNormalizedPos(client.world.getBlockState(rawPos), rawPos);
             Block block = client.world.getBlockState(finalPos).getBlock();
-            repository.save(dimension, Registries.BLOCK.getId(block).getPath(), finalPos, containerStacks);
+            repository.add(dimension, Registries.BLOCK.getId(block).getPath(), finalPos, containerStacks);
             lastOpened.clear();
         }
     }
 
-    private BlockPos getNormalizedPos(World world, BlockPos pos) {
-        BlockState state = world.getBlockState(pos);
-
-        // Only Chests (and Trapped Chests) can be double
+    private BlockPos getNormalizedPos(BlockState state, BlockPos pos) {
         if (state.getBlock() instanceof ChestBlock) {
             ChestType type = state.get(ChestBlock.CHEST_TYPE);
 
