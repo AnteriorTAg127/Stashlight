@@ -10,15 +10,15 @@ import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import strangequark.chestfinder.model.ItemTile;
-import strangequark.chestfinder.repository.ContainerRepository;
+import strangequark.chestfinder.repository.ContainerRepository_OLD;
 
 import java.util.List;
 
 public class SearchScreen extends Screen {
     private TextFieldWidget searchField;
-    private final ContainerRepository repository;
+    private final ContainerRepository_OLD repository;
 
-    public SearchScreen(ContainerRepository repository) {
+    public SearchScreen(ContainerRepository_OLD repository) {
         super(Text.of("Chest Finder"));
         this.repository = repository;
     }

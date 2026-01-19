@@ -1,99 +1,67 @@
 package strangequark.chestfinder.repository;
 
-import com.google.gson.JsonObject;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.math.BlockPos;
-import strangequark.chestfinder.mapper.ContainerMapper;
-import strangequark.chestfinder.model.ContainerEntity;
-import strangequark.chestfinder.model.ItemTile;
-import strangequark.chestfinder.serializer.Serializer;
+import strangequark.chestfinder.model.StackKey;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class ContainerRepository {
-    private JsonObject cachedJson;
-    private List<ContainerEntity> cachedItems;
-    private final Serializer serializer;
-    private final ContainerMapper mapper = new ContainerMapper();
+    private static final Map<String, Map<BlockPos, List<ItemStack>>> CONTAINERS = new HashMap<>();
 
-    public ContainerRepository(Serializer serializer) {
-        this.serializer = serializer;
-    }
+    public void update(String dimension, BlockPos pos, List<ItemStack> stacks) {
+        List<ItemStack> copiedStacks = new ArrayList<>();
 
-    public void add(String dimension, String containerName, BlockPos pos, List<ItemStack> containerStacks) {
-        cachedJson = serializer.read();
-        JsonObject dimObj = cachedJson.has(dimension) ? cachedJson.getAsJsonObject(dimension) : new JsonObject();
-        JsonObject chestJson = mapper.toJson(containerName, containerStacks);
+        for (ItemStack original : stacks) {
+            if (original != null && !original.isEmpty()) {
+                copiedStacks.add(original.copy());
+            }
+        }
 
-        dimObj.add(mapper.serializePos(pos), chestJson);
-
-        cachedJson.add(dimension, dimObj);
-        serializer.write(cachedJson);
-        cachedItems = null;
+        CONTAINERS.computeIfAbsent(dimension, k -> new HashMap<>()).put(pos, copiedStacks);
     }
 
     public void remove(String dimension, BlockPos pos) {
-        cachedJson = serializer.read();
-        JsonObject dimObj = cachedJson.has(dimension) ? cachedJson.getAsJsonObject(dimension) : null;
-        if (dimObj == null) {
-            return;
-        }
-        String key = mapper.serializePos(pos);
-
-        if (dimObj.has(key)) {
-            dimObj.remove(key);
-
-            if (dimObj.isEmpty()) {
-                cachedJson.remove(dimension);
-            }
-
-            serializer.write(cachedJson);
-            cachedItems = null;
+        if (CONTAINERS.containsKey(dimension)) {
+            CONTAINERS.get(dimension).remove(pos);
         }
     }
 
+    public List<ItemStack> getAllStacks() {
+        List<ItemStack> flatList = new ArrayList<>();
 
-    public List<ContainerEntity> getAllItems() {
-        if (cachedItems != null) return cachedItems;
-        cachedJson = cachedJson != null ? cachedJson : serializer.read();
-        cachedItems = mapper.toEntities(cachedJson);
-        return cachedItems;
-    }
-
-    public List<ItemTile> getTiles() {
-        List<ContainerEntity> items = getAllItems();
-
-        Map<String, Map<String, Integer>> agg = new HashMap<>();
-        Map<String, String> nameMap = new HashMap<>();
-        Map<String, Long> timeMap = new HashMap<>();
-
-        for (ContainerEntity e : items) {
-            String key = e.dimension() + ":" + mapper.serializePos(e.pos());
-
-            agg.computeIfAbsent(key, k -> new HashMap<>());
-            agg.get(key).merge(e.itemId(), e.count(), Integer::sum);
-
-            nameMap.putIfAbsent(key, e.containerName());
-            timeMap.putIfAbsent(key, e.timestamp());
-        }
-
-        List<ItemTile> result = new ArrayList<>();
-
-        for (var entry : agg.entrySet()) {
-            String key = entry.getKey();
-            String[] parts = key.split(":");
-            BlockPos pos = mapper.toBlockPos(parts[1]);
-            String containerName = nameMap.get(key);
-            long ts = timeMap.get(key);
-
-            for (var item : entry.getValue().entrySet()) {
-                result.add(new ItemTile(parts[0], containerName, item.getKey(), pos, item.getValue(), ts));
+        for (Map<BlockPos, List<ItemStack>> posMap : CONTAINERS.values()) {
+            for (List<ItemStack> stacks : posMap.values()) {
+                for (ItemStack stack : stacks) {
+                    if (stack != null && !stack.isEmpty()) {
+                        flatList.add(stack);
+                    }
+                }
             }
         }
+        return flatList;
+    }
 
+    public List<ItemStack> getSummary() {
+        List<ItemStack> result = new ArrayList<>();
+
+        for (Map<BlockPos, List<ItemStack>> posMap : CONTAINERS.values()) {
+            for (List<ItemStack> chestContents : posMap.values()) {
+                Map<StackKey, ItemStack> localMap = new LinkedHashMap<>();
+
+                for (ItemStack stack : chestContents) {
+                    if (stack == null || stack.isEmpty()) continue;
+
+                    StackKey key = new StackKey(stack);
+                    if (localMap.containsKey(key)) {
+                        localMap.get(key).increment(stack.getCount());
+                    } else {
+                        localMap.put(key, stack.copy());
+                    }
+                }
+                result.addAll(localMap.values());
+            }
+        }
         return result;
     }
 }

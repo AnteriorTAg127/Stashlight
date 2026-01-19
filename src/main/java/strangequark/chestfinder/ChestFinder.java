@@ -20,7 +20,6 @@ import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.registry.Registries;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
@@ -72,7 +71,8 @@ public class ChestFinder implements ClientModInitializer {
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             serializer = new Serializer(Init.getFileName());
-            repository = new ContainerRepository(serializer);
+            // repository = new ContainerRepository_OLD(serializer);
+            repository = new ContainerRepository();
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
@@ -122,7 +122,8 @@ public class ChestFinder implements ClientModInitializer {
             BlockPos rawPos = lastOpened.pop();
             BlockPos finalPos = getNormalizedPos(client.world.getBlockState(rawPos), rawPos);
             Block block = client.world.getBlockState(finalPos).getBlock();
-            repository.add(dimension, Registries.BLOCK.getId(block).getPath(), finalPos, containerStacks);
+            repository.update(dimension, finalPos, containerStacks);
+            //repository.add(dimension, Registries.BLOCK.getId(block).getPath(), finalPos, containerStacks);
             lastOpened.clear();
         }
     }

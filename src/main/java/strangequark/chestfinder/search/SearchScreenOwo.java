@@ -12,12 +12,9 @@ import io.wispforest.owo.ui.core.*;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
 import org.jetbrains.annotations.NotNull;
 import strangequark.chestfinder.gui.ContainerItemComponent;
-import strangequark.chestfinder.model.ItemTile;
 import strangequark.chestfinder.repository.ContainerRepository;
 
 import java.util.ArrayList;
@@ -40,7 +37,7 @@ public class SearchScreenOwo extends BaseOwoScreen<FlowLayout> {
 
     private final ContainerRepository repository;
     private ScrollContainer<Component> scrollContainer;
-    private FlowLayout scrollContent; // FIX: The inner container that holds the grid
+    private FlowLayout scrollContent;
     private TextBoxComponent searchField;
 
     // Resize Tracking
@@ -85,7 +82,7 @@ public class SearchScreenOwo extends BaseOwoScreen<FlowLayout> {
         // --- 3. SCROLL WRAPPER ---
         FlowLayout gridWrapper = Containers.verticalFlow(Sizing.fill(100), Sizing.expand(100));
         gridWrapper.surface(Surface.outline(COLOR_BORDER_GRID)).padding(Insets.of(1));
-        
+
         this.scrollContent = Containers.verticalFlow(Sizing.content(), Sizing.content());
         this.scrollContent.horizontalAlignment(HorizontalAlignment.CENTER);
         this.scrollContent.padding(Insets.right(4));
@@ -124,28 +121,28 @@ public class SearchScreenOwo extends BaseOwoScreen<FlowLayout> {
     private void refreshGrid(String query) {
         this.scrollContent.clearChildren();
 
-        // Recalculate based on current width
+        // 1. Recalculate layout constraints
         int windowWidth = (int) (this.width * 0.95);
         int availableWidth = windowWidth - (PADDING_MAIN * 2) - SCROLLBAR_WIDTH - 4;
-
-        // Safety check to prevent division by zero on minimizing
         if (availableWidth < 24) availableWidth = 24;
 
         int itemFootprint = COMPONENT_SIZE + GAP_SIZE;
         int slotsPerRow = Math.max(1, availableWidth / itemFootprint);
 
-        List<ItemTile> allItems = repository.getTiles();
-        List<ItemTile> itemsToShow = new ArrayList<>();
+        // 2. Use the new Summary logic
+        List<ItemStack> allItems = repository.getSummary();
+        List<ItemStack> itemsToShow = new ArrayList<>();
         String lowerQuery = query.toLowerCase();
 
-        for (ItemTile tile : allItems) {
-            Identifier id = Identifier.of(tile.itemId());
-            if (!Registries.ITEM.containsId(id)) continue;
-            if (query.isEmpty() || tile.itemId().contains(lowerQuery)) {
-                itemsToShow.add(tile);
+        // 3. Filter items based on display name
+        for (ItemStack stack : allItems) {
+            String displayName = stack.getName().getString().toLowerCase();
+            if (query.isEmpty() || displayName.contains(lowerQuery)) {
+                itemsToShow.add(stack);
             }
         }
 
+        // 4. Build the Grid Layout
         int totalItems = itemsToShow.size();
         int rowsNeeded = (int) Math.ceil((double) totalItems / slotsPerRow);
 
@@ -157,12 +154,12 @@ public class SearchScreenOwo extends BaseOwoScreen<FlowLayout> {
         );
         grid.margins(Insets.of(GAP_SIZE / 2));
 
+        // 5. Populate Grid with ContainerItemComponents
         for (int i = 0; i < totalItems; i++) {
-            ItemTile tile = itemsToShow.get(i);
-            Identifier id = Identifier.of(tile.itemId());
-            ItemStack stack = new ItemStack(Registries.ITEM.get(id));
+            ItemStack stack = itemsToShow.get(i);
 
-            var widget = ContainerItemComponent.of(stack, tile.totalCount());
+            // ContainerItemComponent already handles counts up to 3456 perfectly
+            var widget = ContainerItemComponent.of(stack, stack.getCount());
             widget.margins(Insets.of(GAP_SIZE / 2));
 
             int row = i / slotsPerRow;
@@ -170,7 +167,6 @@ public class SearchScreenOwo extends BaseOwoScreen<FlowLayout> {
             grid.child(widget, row, col);
         }
 
-        // Add the new grid to our dedicated content layer
         this.scrollContent.child(grid);
     }
 
@@ -184,5 +180,16 @@ public class SearchScreenOwo extends BaseOwoScreen<FlowLayout> {
     public void resize(MinecraftClient client, int width, int height) {
         super.resize(client, width, height);
         this.refreshGrid(this.searchField.getText());
+    }
+
+    @Override
+    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
+        super.render(context, mouseX, mouseY, delta);
+        this.uiAdapter.drawTooltip(context, mouseX, mouseY, delta);
+    }
+
+    @Override
+    public boolean shouldPause() {
+        return false;
     }
 }
