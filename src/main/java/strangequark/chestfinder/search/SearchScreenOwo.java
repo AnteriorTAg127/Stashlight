@@ -37,6 +37,7 @@ public class SearchScreenOwo extends BaseOwoScreen<FlowLayout> {
 
     private final ContainerRepository repository;
     private ScrollContainer<Component> scrollContainer;
+    private FlowLayout rootComponent;
     private FlowLayout scrollContent;
     private TextBoxComponent searchField;
 
@@ -50,7 +51,16 @@ public class SearchScreenOwo extends BaseOwoScreen<FlowLayout> {
     }
 
     @Override
+    protected void init() {
+        super.init();
+        if (this.rootComponent.focusHandler() != null && this.searchField.focusHandler() != null) {
+            this.rootComponent.focusHandler().focus(this.searchField, Component.FocusSource.MOUSE_CLICK);
+        }
+    }
+
+    @Override
     protected void build(FlowLayout rootComponent) {
+        this.rootComponent = rootComponent;
 
         // --- 1. MAIN WINDOW ---
         FlowLayout mainWindow = Containers.verticalFlow(Sizing.fill(95), Sizing.fill(95));
@@ -69,7 +79,6 @@ public class SearchScreenOwo extends BaseOwoScreen<FlowLayout> {
         String oldText = (this.searchField != null) ? this.searchField.getText() : "";
         this.searchField = Components.textBox(Sizing.fixed(SEARCH_WIDTH));
         this.searchField.setMaxLength(100);
-        this.searchField.setText(oldText);
         this.searchField.onChanged().subscribe(this::refreshGrid);
 
         // --- 3. SCROLL WRAPPER ---
@@ -177,7 +186,7 @@ public class SearchScreenOwo extends BaseOwoScreen<FlowLayout> {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         super.render(context, mouseX, mouseY, delta);
-        this.uiAdapter.drawTooltip(context, mouseX, mouseY, delta);
+        //this.uiAdapter.drawTooltip(context, mouseX, mouseY, delta);
     }
 
     @Override
