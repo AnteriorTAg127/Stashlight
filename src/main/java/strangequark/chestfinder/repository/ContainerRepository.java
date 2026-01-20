@@ -1,7 +1,6 @@
 package strangequark.chestfinder.repository;
 
 import net.minecraft.item.ItemStack;
-import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.util.math.BlockPos;
 import strangequark.chestfinder.model.ContainerSnapshot;
 import strangequark.chestfinder.model.IndexedItem;
@@ -13,7 +12,6 @@ import java.util.*;
 public class ContainerRepository {
 
     private final Serializer serializer;
-    private final RegistryWrapper.WrapperLookup lookup;
 
     // The Source of Truth (For NBT Serialization)
     private final Map<String, Map<BlockPos, ContainerSnapshot>> DATABASE;
@@ -21,10 +19,9 @@ public class ContainerRepository {
     // The Flattened UI Index (Pre-computed for search performance)
     private final List<IndexedItem> SEARCH_INDEX = new ArrayList<>();
 
-    public ContainerRepository(Serializer serializer, RegistryWrapper.WrapperLookup lookup) {
+    public ContainerRepository(Serializer serializer) {
         this.serializer = serializer;
-        this.lookup = lookup;
-        DATABASE = serializer.read(lookup);
+        DATABASE = serializer.read();
         rebuildIndex();
     }
 
@@ -42,14 +39,14 @@ public class ContainerRepository {
         ContainerSnapshot snapshot = new ContainerSnapshot(blockName, System.currentTimeMillis(), copiedStacks);
         DATABASE.computeIfAbsent(dimension, k -> new HashMap<>()).put(pos, snapshot);
 
-        serializer.write(DATABASE, this.lookup);
+        serializer.write(DATABASE);
         rebuildIndex();
     }
 
     public void remove(String dimension, BlockPos pos) {
         if (DATABASE.containsKey(dimension)) {
             DATABASE.get(dimension).remove(pos);
-            serializer.write(DATABASE, this.lookup);
+            serializer.write(DATABASE);
             rebuildIndex();
         }
     }

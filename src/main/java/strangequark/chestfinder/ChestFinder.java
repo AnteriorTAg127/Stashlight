@@ -70,13 +70,13 @@ public class ChestFinder implements ClientModInitializer {
         });
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
-            serializer = new Serializer(Init.getFileName());
-            repository = new ContainerRepository(serializer, handler.getRegistryManager());
+            serializer = new Serializer(Init.getFileName(), handler.getRegistryManager());
+            repository = new ContainerRepository(serializer);
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             if (repository != null && serializer != null) {
-                serializer.write(repository.getDatabase(), handler.getRegistryManager());
+                serializer.write(repository.getDatabase());
             }
             serializer = null;
             repository = null;

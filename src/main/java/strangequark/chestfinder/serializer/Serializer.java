@@ -13,15 +13,23 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
-public record Serializer(Path file) {
+public class Serializer {
+    private final Path file;
+    private final RegistryWrapper.WrapperLookup lookup;
 
-    public void write(Map<String, Map<BlockPos, ContainerSnapshot>> database, RegistryWrapper.WrapperLookup registries) {
+    public Serializer(Path file, RegistryWrapper.WrapperLookup lookup) {
+        this.file = file;
+        this.lookup = lookup;
+    }
+
+
+    public void write(Map<String, Map<BlockPos, ContainerSnapshot>> database) {
         if (file == null) return;
 
         NbtCompound root = new NbtCompound();
         database.forEach((dim, posMap) -> {
             NbtCompound dimTag = new NbtCompound();
-            posMap.forEach((pos, snap) -> dimTag.put(String.valueOf(pos.asLong()), snap.serialize(registries)));
+            posMap.forEach((pos, snap) -> dimTag.put(String.valueOf(pos.asLong()), snap.serialize(this.lookup)));
             root.put(dim, dimTag);
         });
 
@@ -32,7 +40,7 @@ public record Serializer(Path file) {
         }
     }
 
-    public Map<String, Map<BlockPos, ContainerSnapshot>> read(RegistryWrapper.WrapperLookup registries) {
+    public Map<String, Map<BlockPos, ContainerSnapshot>> read() {
         Map<String, Map<BlockPos, ContainerSnapshot>> database = new HashMap<>();
         if (file == null || !Files.exists(file)) return database;
 
@@ -45,7 +53,7 @@ public record Serializer(Path file) {
                     for (String key : dimTag.getKeys()) {
                         BlockPos pos = BlockPos.fromLong(Long.parseLong(key));
                         dimTag.getCompound(key).ifPresent(snapNbt ->
-                                posMap.put(pos, ContainerSnapshot.deserialize(registries, snapNbt))
+                                posMap.put(pos, ContainerSnapshot.deserialize(this.lookup, snapNbt))
                         );
                     }
                     database.put(dim, posMap);
