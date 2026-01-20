@@ -1,8 +1,8 @@
 package strangequark.chestfinder.serializer;
 
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtIo;
-import net.minecraft.nbt.NbtSizeTracker;
+import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.*;
+import net.minecraft.registry.RegistryOps;
 import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.util.math.BlockPos;
 import strangequark.chestfinder.ChestFinder;
@@ -10,7 +10,9 @@ import strangequark.chestfinder.model.ContainerSnapshot;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class Serializer {
@@ -22,23 +24,6 @@ public class Serializer {
         this.lookup = lookup;
     }
 
-
-    public void write(Map<String, Map<BlockPos, ContainerSnapshot>> database) {
-        if (file == null) return;
-
-        NbtCompound root = new NbtCompound();
-        database.forEach((dim, posMap) -> {
-            NbtCompound dimTag = new NbtCompound();
-            posMap.forEach((pos, snap) -> dimTag.put(String.valueOf(pos.asLong()), snap.serialize(this.lookup)));
-            root.put(dim, dimTag);
-        });
-
-        try {
-            NbtIo.writeCompressed(root, file);
-        } catch (Exception e) {
-            ChestFinder.LOGGER.error("Save failed", e);
-        }
-    }
 
     public Map<String, Map<BlockPos, ContainerSnapshot>> read() {
         Map<String, Map<BlockPos, ContainerSnapshot>> database = new HashMap<>();
@@ -53,7 +38,7 @@ public class Serializer {
                     for (String key : dimTag.getKeys()) {
                         BlockPos pos = BlockPos.fromLong(Long.parseLong(key));
                         dimTag.getCompound(key).ifPresent(snapNbt ->
-                                posMap.put(pos, ContainerSnapshot.deserialize(this.lookup, snapNbt))
+                                posMap.put(pos, deserializeSnapshot(snapNbt))
                         );
                     }
                     database.put(dim, posMap);
@@ -64,4 +49,61 @@ public class Serializer {
         }
         return database;
     }
+
+    public void write(Map<String, Map<BlockPos, ContainerSnapshot>> database) {
+        if (file == null) return;
+
+        NbtCompound root = new NbtCompound();
+        database.forEach((dim, posMap) -> {
+            NbtCompound dimTag = new NbtCompound();
+            posMap.forEach((pos, snap) -> dimTag.put(String.valueOf(pos.asLong()), serializeSnapshot(snap)));
+            root.put(dim, dimTag);
+        });
+
+        try {
+            NbtIo.writeCompressed(root, file);
+        } catch (Exception e) {
+            ChestFinder.LOGGER.error("Save failed", e);
+        }
+    }
+
+    private NbtCompound serializeSnapshot(ContainerSnapshot snap) {
+        NbtCompound nbt = new NbtCompound();
+        nbt.putString("name", snap.containerName());
+        nbt.putLong("time", snap.timestamp());
+
+        NbtList itemList = new NbtList();
+        for (ItemStack stack : snap.items()) {
+            itemList.add(serializeStack(stack));
+        }
+        nbt.put("items", itemList);
+        return nbt;
+    }
+
+    private ContainerSnapshot deserializeSnapshot(NbtCompound nbt) {
+        String name = nbt.getString("name").orElse("");
+        long timestamp = nbt.getLong("time").orElse(0L);
+
+        List<ItemStack> items = new ArrayList<>();
+        nbt.getList("items").ifPresent(itemList -> {
+            for (int i = 0; i < itemList.size(); i++) {
+                // Safe access to the compound inside the list
+                itemList.getCompound(i)
+                        .map(this::deserializeStack)
+                        .ifPresent(items::add);
+            }
+        });
+        return new ContainerSnapshot(name, timestamp, items);
+    }
+
+    private NbtElement serializeStack(ItemStack stack) {
+        var ops = RegistryOps.of(NbtOps.INSTANCE, lookup);
+        return ItemStack.CODEC.encodeStart(ops, stack).getOrThrow();
+    }
+
+    private ItemStack deserializeStack(NbtCompound nbt) {
+        var ops = RegistryOps.of(NbtOps.INSTANCE, lookup);
+        return ItemStack.CODEC.parse(ops, nbt).getOrThrow();
+    }
+
 }
