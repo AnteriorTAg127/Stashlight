@@ -1,55 +1,77 @@
 package strangequark.chestfinder.repository;
 
 import net.minecraft.item.ItemStack;
+import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.util.math.BlockPos;
+import strangequark.chestfinder.model.ContainerSnapshot;
+import strangequark.chestfinder.model.IndexedItem;
 import strangequark.chestfinder.model.StackKey;
+import strangequark.chestfinder.serializer.Serializer;
 
 import java.util.*;
 
 public class ContainerRepository {
-    private static final Map<String, Map<BlockPos, List<ItemStack>>> CONTAINERS = new HashMap<>();
 
-    public void update(String dimension, BlockPos pos, List<ItemStack> stacks) {
+    private final Serializer serializer;
+    private final RegistryWrapper.WrapperLookup lookup;
+
+    // The Source of Truth (For NBT Serialization)
+    private final Map<String, Map<BlockPos, ContainerSnapshot>> DATABASE;
+
+    // The Flattened UI Index (Pre-computed for search performance)
+    private final List<IndexedItem> SEARCH_INDEX = new ArrayList<>();
+
+    public ContainerRepository(Serializer serializer, RegistryWrapper.WrapperLookup lookup) {
+        this.serializer = serializer;
+        this.lookup = lookup;
+        DATABASE = serializer.read(lookup);
+        rebuildIndex();
+    }
+
+    /**
+     * Updates a container and triggers an index rebuild.
+     */
+    public void update(String dimension, BlockPos pos, String blockName, List<ItemStack> stacks) {
         List<ItemStack> copiedStacks = new ArrayList<>();
-
         for (ItemStack original : stacks) {
             if (original != null && !original.isEmpty()) {
                 copiedStacks.add(original.copy());
             }
         }
 
-        CONTAINERS.computeIfAbsent(dimension, k -> new HashMap<>()).put(pos, copiedStacks);
+        ContainerSnapshot snapshot = new ContainerSnapshot(blockName, System.currentTimeMillis(), copiedStacks);
+        DATABASE.computeIfAbsent(dimension, k -> new HashMap<>()).put(pos, snapshot);
+
+        serializer.write(DATABASE, this.lookup);
+        rebuildIndex();
     }
 
     public void remove(String dimension, BlockPos pos) {
-        if (CONTAINERS.containsKey(dimension)) {
-            CONTAINERS.get(dimension).remove(pos);
+        if (DATABASE.containsKey(dimension)) {
+            DATABASE.get(dimension).remove(pos);
+            serializer.write(DATABASE, this.lookup);
+            rebuildIndex();
         }
     }
 
-    public List<ItemStack> getAllStacks() {
-        List<ItemStack> flatList = new ArrayList<>();
+    /**
+     * Turns the nested DATABASE into a flat SEARCH_INDEX.
+     * This moves the O(N) computation out of the UI render loop.
+     */
+    public void rebuildIndex() {
+        SEARCH_INDEX.clear();
 
-        for (Map<BlockPos, List<ItemStack>> posMap : CONTAINERS.values()) {
-            for (List<ItemStack> stacks : posMap.values()) {
-                for (ItemStack stack : stacks) {
-                    if (stack != null && !stack.isEmpty()) {
-                        flatList.add(stack);
-                    }
-                }
-            }
-        }
-        return flatList;
-    }
+        for (var dimEntry : DATABASE.entrySet()) {
+            String dimension = dimEntry.getKey();
 
-    public List<ItemStack> getSummary() {
-        List<ItemStack> result = new ArrayList<>();
+            for (var posEntry : dimEntry.getValue().entrySet()) {
+                BlockPos pos = posEntry.getKey();
+                ContainerSnapshot snapshot = posEntry.getValue();
 
-        for (Map<BlockPos, List<ItemStack>> posMap : CONTAINERS.values()) {
-            for (List<ItemStack> chestContents : posMap.values()) {
+                // Group items within this specific container
                 Map<StackKey, ItemStack> localMap = new LinkedHashMap<>();
 
-                for (ItemStack stack : chestContents) {
+                for (ItemStack stack : snapshot.items()) {
                     if (stack == null || stack.isEmpty()) continue;
 
                     StackKey key = new StackKey(stack);
@@ -59,9 +81,33 @@ public class ContainerRepository {
                         localMap.put(key, stack.copy());
                     }
                 }
-                result.addAll(localMap.values());
+
+                // Convert grouped ItemStacks into IndexedItem discoveries
+                for (ItemStack summedStack : localMap.values()) {
+                    SEARCH_INDEX.add(new IndexedItem(
+                            summedStack,
+                            pos,
+                            dimension,
+                            snapshot.containerName(),
+                            snapshot.timestamp()
+                    ));
+                }
             }
         }
-        return result;
     }
+
+    /**
+     * Used by SearchScreenOwo to get the pre-computed items.
+     */
+    public List<IndexedItem> getSearchIndex() {
+        return SEARCH_INDEX;
+    }
+
+    /**
+     * Used by NbtPersistence to save the raw data.
+     */
+    public Map<String, Map<BlockPos, ContainerSnapshot>> getDatabase() {
+        return DATABASE;
+    }
+
 }

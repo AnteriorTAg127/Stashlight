@@ -70,12 +70,16 @@ public class ChestFinder implements ClientModInitializer {
         });
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
-            serializer = new Serializer(Init.getFileName());
+            // serializer = new Serializer_OLD(Init.getFileName());
             // repository = new ContainerRepository_OLD(serializer);
-            repository = new ContainerRepository();
+            serializer = new Serializer(Init.getFileName());
+            repository = new ContainerRepository(serializer, handler.getRegistryManager());
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            if (repository != null && serializer != null) {
+                serializer.write(repository.getDatabase(), handler.getRegistryManager());
+            }
             serializer = null;
             repository = null;
         });
@@ -122,8 +126,7 @@ public class ChestFinder implements ClientModInitializer {
             BlockPos rawPos = lastOpened.pop();
             BlockPos finalPos = getNormalizedPos(client.world.getBlockState(rawPos), rawPos);
             Block block = client.world.getBlockState(finalPos).getBlock();
-            repository.update(dimension, finalPos, containerStacks);
-            //repository.add(dimension, Registries.BLOCK.getId(block).getPath(), finalPos, containerStacks);
+            repository.update(dimension, finalPos, block.getName().getString(), containerStacks);
             lastOpened.clear();
         }
     }

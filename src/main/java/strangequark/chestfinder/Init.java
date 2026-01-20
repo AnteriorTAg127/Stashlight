@@ -32,22 +32,22 @@ public final class Init {
     public static Path getFileName() {
         MinecraftClient client = MinecraftClient.getInstance();
         String fileName;
-        
+
         if (client.isInSingleplayer()) {
             if (client.getServer() == null) return null;
 
             String id = client.getServer()
                     .getSaveProperties()
                     .getLevelName()
-                    .replace(' ', '_');
+                    .replaceAll("[^a-zA-Z0-9-_]", "_");
 
-            fileName = id + ".json";
+            fileName = id + ".dat";
         } else {
             ServerInfo info = client.getCurrentServerEntry();
             if (info == null) return null;
 
-            String norm = info.address.replace(':', '_');
-            fileName = "MP_" + norm + ".json";
+            String norm = info.address.replace(':', '_').replace('/', '_');
+            fileName = "MP_" + norm + ".dat";
         }
 
         return ROOT.resolve(fileName);

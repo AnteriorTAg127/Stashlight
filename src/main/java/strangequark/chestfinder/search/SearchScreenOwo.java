@@ -11,10 +11,10 @@ import io.wispforest.owo.ui.container.ScrollContainer;
 import io.wispforest.owo.ui.core.*;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 import org.jetbrains.annotations.NotNull;
-import strangequark.chestfinder.gui.ContainerItemComponent;
+import strangequark.chestfinder.gui.ItemSlot;
+import strangequark.chestfinder.model.IndexedItem;
 import strangequark.chestfinder.repository.ContainerRepository;
 
 import java.util.ArrayList;
@@ -40,10 +40,6 @@ public class SearchScreenOwo extends BaseOwoScreen<FlowLayout> {
     private FlowLayout scrollContent;
     private TextBoxComponent searchField;
 
-    // Resize Tracking
-    private int lastWidth = -1;
-    private int lastHeight = -1;
-
     public SearchScreenOwo(ContainerRepository repository) {
         this.repository = repository;
     }
@@ -55,9 +51,6 @@ public class SearchScreenOwo extends BaseOwoScreen<FlowLayout> {
 
     @Override
     protected void build(FlowLayout rootComponent) {
-        // Track size to detect manual resizing later
-        this.lastWidth = this.width;
-        this.lastHeight = this.height;
 
         // --- 1. MAIN WINDOW ---
         FlowLayout mainWindow = Containers.verticalFlow(Sizing.fill(95), Sizing.fill(95));
@@ -121,7 +114,6 @@ public class SearchScreenOwo extends BaseOwoScreen<FlowLayout> {
     private void refreshGrid(String query) {
         this.scrollContent.clearChildren();
 
-        // 1. Recalculate layout constraints
         int windowWidth = (int) (this.width * 0.95);
         int availableWidth = windowWidth - (PADDING_MAIN * 2) - SCROLLBAR_WIDTH - 4;
         if (availableWidth < 24) availableWidth = 24;
@@ -129,21 +121,22 @@ public class SearchScreenOwo extends BaseOwoScreen<FlowLayout> {
         int itemFootprint = COMPONENT_SIZE + GAP_SIZE;
         int slotsPerRow = Math.max(1, availableWidth / itemFootprint);
 
-        // 2. Use the new Summary logic
-        List<ItemStack> allItems = repository.getSummary();
-        List<ItemStack> itemsToShow = new ArrayList<>();
+        // 1. Filter the IndexedItems directly
+        List<IndexedItem> indexedItems = repository.getSearchIndex();
+        List<IndexedItem> filteredItems = new ArrayList<>();
         String lowerQuery = query.toLowerCase();
 
-        // 3. Filter items based on display name
-        for (ItemStack stack : allItems) {
-            String displayName = stack.getName().getString().toLowerCase();
-            if (query.isEmpty() || displayName.contains(lowerQuery)) {
-                itemsToShow.add(stack);
+        for (IndexedItem item : indexedItems) {
+            String itemName = item.stack().getName().getString().toLowerCase();
+            String containerName = item.containerName().toLowerCase();
+
+            if (query.isEmpty() || itemName.contains(lowerQuery) || containerName.contains(lowerQuery)) {
+                filteredItems.add(item);
             }
         }
 
-        // 4. Build the Grid Layout
-        int totalItems = itemsToShow.size();
+        // 2. Build the Grid Layout
+        int totalItems = filteredItems.size();
         int rowsNeeded = (int) Math.ceil((double) totalItems / slotsPerRow);
 
         GridLayout grid = Containers.grid(
@@ -154,12 +147,11 @@ public class SearchScreenOwo extends BaseOwoScreen<FlowLayout> {
         );
         grid.margins(Insets.of(GAP_SIZE / 2));
 
-        // 5. Populate Grid with ContainerItemComponents
+        // 3. Populate Grid with ContainerItemComponents
         for (int i = 0; i < totalItems; i++) {
-            ItemStack stack = itemsToShow.get(i);
+            IndexedItem match = filteredItems.get(i);
 
-            // ContainerItemComponent already handles counts up to 3456 perfectly
-            var widget = ContainerItemComponent.of(stack, stack.getCount());
+            var widget = ItemSlot.of(match);
             widget.margins(Insets.of(GAP_SIZE / 2));
 
             int row = i / slotsPerRow;

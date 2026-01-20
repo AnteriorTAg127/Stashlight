@@ -6,7 +6,7 @@ import net.minecraft.util.math.BlockPos;
 import strangequark.chestfinder.mapper.ContainerMapper;
 import strangequark.chestfinder.model.ContainerEntity;
 import strangequark.chestfinder.model.ItemTile;
-import strangequark.chestfinder.serializer.Serializer;
+import strangequark.chestfinder.serializer.Serializer_OLD;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -16,10 +16,10 @@ import java.util.Map;
 public class ContainerRepository_OLD {
     private JsonObject cachedJson;
     private List<ContainerEntity> cachedItems;
-    private final Serializer serializer;
+    private final Serializer_OLD serializer;
     private final ContainerMapper mapper = new ContainerMapper();
 
-    public ContainerRepository_OLD(Serializer serializer) {
+    public ContainerRepository_OLD(Serializer_OLD serializer) {
         this.serializer = serializer;
     }
 

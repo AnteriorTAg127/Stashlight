@@ -11,18 +11,18 @@ import org.w3c.dom.Element;
 
 import java.util.Map;
 
-public class ScalableLabelComponent extends LabelComponent {
+public class QuantityLabel extends LabelComponent {
     protected float scale = 1f;
 
-    public ScalableLabelComponent(Text text) {
+    public QuantityLabel(Text text) {
         super(text);
     }
 
-    public static ScalableLabelComponent of(Text text) {
-        return new ScalableLabelComponent(text);
+    public static QuantityLabel of(Text text) {
+        return new QuantityLabel(text);
     }
 
-    public ScalableLabelComponent scale(float scale) {
+    public QuantityLabel scale(float scale) {
         this.scale = scale;
 
         // Important: Scaling changes the effective size, so notify the parent to re-layout
