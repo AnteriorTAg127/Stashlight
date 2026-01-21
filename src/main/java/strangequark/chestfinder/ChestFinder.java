@@ -7,12 +7,10 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
-import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.BlockWithEntity;
 import net.minecraft.block.ChestBlock;
 import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.block.enums.ChestType;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen;
@@ -20,13 +18,13 @@ import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.inventory.DoubleInventory;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
@@ -35,9 +33,6 @@ import org.slf4j.LoggerFactory;
 import strangequark.chestfinder.repository.ContainerRepository;
 import strangequark.chestfinder.search.SearchScreen;
 import strangequark.chestfinder.serializer.Serializer;
-
-import java.util.ArrayDeque;
-import java.util.Deque;
 
 public class ChestFinder implements ClientModInitializer {
     public static final String MOD_ID = "chestfinder";
@@ -48,14 +43,18 @@ public class ChestFinder implements ClientModInitializer {
     private static KeyBinding searchKey;
     public static final KeyBinding.Category CHEST_FINDER = KeyBinding.Category.create(Identifier.of(MOD_ID, "chestfinder"));
 
-    private final Deque<BlockPos> lastOpened = new ArrayDeque<>();
+    @Nullable
+    private BlockPos lastOpened;
 
     @Override
     public void onInitializeClient() {
         Init.init();
+
         UseBlockCallback.EVENT.register(this::onBlockUsed);
         ScreenEvents.AFTER_INIT.register(this::onScreenInit);
-        PlayerBlockBreakEvents.AFTER.register(this::onBlockBreak);
+
+        // BEFORE is critical: we must resolve the chest's identity while it still exists in the world.
+        PlayerBlockBreakEvents.BEFORE.register(this::onBlockBreak);
 
         searchKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "Search",
@@ -84,64 +83,92 @@ public class ChestFinder implements ClientModInitializer {
         });
     }
 
-    private void onBlockBreak(World world, PlayerEntity playerEntity, BlockPos blockPos, BlockState blockState, @Nullable BlockEntity blockEntity) {
-        if (repository == null) return;
-        BlockPos targetPos = getNormalizedPos(blockState, blockPos);
-        String dimension = world.getRegistryKey().getValue().getPath();
-        repository.remove(dimension, targetPos);
+    @SuppressWarnings("SameReturnValue")
+    private boolean onBlockBreak(World world, PlayerEntity playerEntity, BlockPos blockPos, BlockState blockState, @Nullable BlockEntity blockEntity) {
+        if (repository == null || !(blockState.getBlock() instanceof ChestBlock)) {
+            return true;
+        }
+
+        // Use the same canonical resolution used during saving to find the correct database key to delete.
+        BlockPos canonicalPos = getCanonicalChestPos(world, blockPos);
+        String dimension = world.getRegistryKey().getValue().toString();
+        repository.remove(dimension, canonicalPos);
+        return true;
     }
 
     private ActionResult onBlockUsed(PlayerEntity playerEntity, World world, Hand hand, BlockHitResult blockHitResult) {
         BlockPos pos = blockHitResult.getBlockPos();
         BlockState state = world.getBlockState(pos);
-        Block block = state.getBlock();
-        if (block instanceof BlockWithEntity) {
-            lastOpened.push(pos);
+        if (state.getBlock() instanceof BlockWithEntity) {
+            lastOpened = pos;
         }
         return ActionResult.PASS;
     }
 
     private void onScreenInit(MinecraftClient client, Screen screen, int w, int h) {
-        if (screen instanceof CreativeInventoryScreen) return;
-        if (client.world == null) return;
+        if (screen instanceof CreativeInventoryScreen || client.world == null) {
+            return;
+        }
 
         if (screen instanceof HandledScreen<?> handled) {
             var handler = handled.getScreenHandler();
+            // Serialize on close to ensure the database reflects the final state of the inventory.
             ScreenEvents.remove(screen).register(closedScreen -> serializeContainer(client, handler));
         }
     }
 
     private void serializeContainer(MinecraftClient client, ScreenHandler handler) {
-        if (client.world == null) return;
+        if (client.world == null || repository == null || lastOpened == null) {
+            return;
+        }
 
         var stacks = handler.getStacks();
-        int containerSize = stacks.size() - 36;
+        int containerSize = stacks.size() - 36; // Standard survival inventory assumption
         if (containerSize <= 0) return;
 
-        var containerStacks = stacks.subList(0, containerSize);
-        String dimension = client.world.getRegistryKey().getValue().getPath();
+        String dimension = client.world.getRegistryKey().getValue().toString();
+        BlockPos raw = lastOpened;
+        BlockPos canonical = getCanonicalChestPos(client.world, raw);
 
-        if (!lastOpened.isEmpty()) {
-            BlockPos rawPos = lastOpened.pop();
-            BlockPos finalPos = getNormalizedPos(client.world.getBlockState(rawPos), rawPos);
-            Block block = client.world.getBlockState(finalPos).getBlock();
-            repository.update(dimension, finalPos, block.getName().getString(), containerSize, containerStacks);
-            lastOpened.clear();
-        }
+        // INVARIANT: Always nuke both 'raw' and 'canonical' keys.
+        // This handles cases where a single chest was just merged into a double chest,
+        // or a double chest was split, ensuring no "ghost" records remain at the old coordinates.
+        repository.remove(dimension, raw);
+        repository.remove(dimension, canonical);
+
+        BlockState state = client.world.getBlockState(canonical);
+        repository.update(
+                dimension,
+                canonical,
+                state.getBlock().getName().getString(),
+                containerSize,
+                stacks.subList(0, containerSize)
+        );
+
+        lastOpened = null;
     }
 
-    private BlockPos getNormalizedPos(BlockState state, BlockPos pos) {
-        if (state.getBlock() instanceof ChestBlock) {
-            ChestType type = state.get(ChestBlock.CHEST_TYPE);
+    private BlockPos getCanonicalChestPos(World world, BlockPos pos) {
+        BlockState state = world.getBlockState(pos);
+        if (!(state.getBlock() instanceof ChestBlock chest)) return pos;
 
-            // If we clicked the RIGHT half, we want to swap to the LEFT half's position
-            // so the data always stays on the same block.
-            if (type == ChestType.RIGHT) {
-                Direction facing = state.get(ChestBlock.FACING);
-                // The "Left" half is always Counter-Clockwise from the "Right" half's facing direction
-                return pos.offset(facing.rotateYCounterclockwise());
+        // Ask the vanilla ChestBlock to resolve the inventory. This is our Source of Truth.
+        var inv = ChestBlock.getInventory(chest, state, world, pos, true);
+
+        if (inv instanceof DoubleInventory di) {
+            try {
+                // We use reflection to find the 'first' half of the DoubleInventory.
+                // This aligns our database key with Minecraft's internal 'Master' half.
+                var f = DoubleInventory.class.getDeclaredField("first");
+                f.setAccessible(true);
+                var first = f.get(di);
+                if (first instanceof BlockEntity be) {
+                    return be.getPos();
+                }
+            } catch (ReflectiveOperationException ignored) {
             }
         }
+
         return pos;
     }
 }
