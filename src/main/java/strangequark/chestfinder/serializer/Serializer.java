@@ -70,6 +70,7 @@ public class Serializer {
     private NbtCompound serializeSnapshot(ContainerSnapshot snap) {
         NbtCompound nbt = new NbtCompound();
         nbt.putString("name", snap.containerName());
+        nbt.putInt("capacity", snap.containerCapacity());
         nbt.putLong("time", snap.timestamp());
 
         NbtList itemList = new NbtList();
@@ -82,6 +83,7 @@ public class Serializer {
 
     private ContainerSnapshot deserializeSnapshot(NbtCompound nbt) {
         String name = nbt.getString("name").orElse("");
+        int capacity = nbt.getInt("capacity").orElse(0);
         long timestamp = nbt.getLong("time").orElse(0L);
 
         List<ItemStack> items = new ArrayList<>();
@@ -93,7 +95,7 @@ public class Serializer {
                         .ifPresent(items::add);
             }
         });
-        return new ContainerSnapshot(name, timestamp, items);
+        return new ContainerSnapshot(name, capacity, items, timestamp);
     }
 
     private NbtElement serializeStack(ItemStack stack) {

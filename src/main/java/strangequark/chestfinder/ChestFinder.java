@@ -26,13 +26,14 @@ import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import strangequark.chestfinder.repository.ContainerRepository;
-import strangequark.chestfinder.search.SearchScreenOwo;
+import strangequark.chestfinder.search.SearchScreen;
 import strangequark.chestfinder.serializer.Serializer;
 
 import java.util.ArrayDeque;
@@ -65,7 +66,7 @@ public class ChestFinder implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (searchKey.wasPressed()) {
-                client.setScreen(new SearchScreenOwo(repository));
+                client.setScreen(new SearchScreen(repository));
             }
         });
 
@@ -124,7 +125,7 @@ public class ChestFinder implements ClientModInitializer {
             BlockPos rawPos = lastOpened.pop();
             BlockPos finalPos = getNormalizedPos(client.world.getBlockState(rawPos), rawPos);
             Block block = client.world.getBlockState(finalPos).getBlock();
-            repository.update(dimension, finalPos, block.getName().getString(), containerStacks);
+            repository.update(dimension, finalPos, block.getName().getString(), containerSize, containerStacks);
             lastOpened.clear();
         }
     }
@@ -136,7 +137,7 @@ public class ChestFinder implements ClientModInitializer {
             // If we clicked the RIGHT half, we want to swap to the LEFT half's position
             // so the data always stays on the same block.
             if (type == ChestType.RIGHT) {
-                net.minecraft.util.math.Direction facing = state.get(ChestBlock.FACING);
+                Direction facing = state.get(ChestBlock.FACING);
                 // The "Left" half is always Counter-Clockwise from the "Right" half's facing direction
                 return pos.offset(facing.rotateYCounterclockwise());
             }

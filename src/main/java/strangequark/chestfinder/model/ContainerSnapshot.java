@@ -9,6 +9,8 @@ import java.util.List;
  */
 public record ContainerSnapshot(
         String containerName,
-        long timestamp,
-        List<ItemStack> items) {
+        int containerCapacity,
+        List<ItemStack> items,
+        long timestamp
+) {
 }

@@ -14,21 +14,21 @@ public class ContainerRepository {
     private final Serializer serializer;
 
     // The Source of Truth (For NBT Serialization)
-    private final Map<String, Map<BlockPos, ContainerSnapshot>> DATABASE;
+    private final Map<String, Map<BlockPos, ContainerSnapshot>> CONTAINER_ENTRIES_MAP;
 
     // The Flattened UI Index (Pre-computed for search performance)
     private final List<IndexedItem> SEARCH_INDEX = new ArrayList<>();
 
     public ContainerRepository(Serializer serializer) {
         this.serializer = serializer;
-        DATABASE = serializer.read();
+        CONTAINER_ENTRIES_MAP = serializer.read();
         rebuildIndex();
     }
 
     /**
      * Updates a container and triggers an index rebuild.
      */
-    public void update(String dimension, BlockPos pos, String blockName, List<ItemStack> stacks) {
+    public void update(String dimension, BlockPos pos, String blockName, int capacity, List<ItemStack> stacks) {
         List<ItemStack> copiedStacks = new ArrayList<>();
         for (ItemStack original : stacks) {
             if (original != null && !original.isEmpty()) {
@@ -36,17 +36,17 @@ public class ContainerRepository {
             }
         }
 
-        ContainerSnapshot snapshot = new ContainerSnapshot(blockName, System.currentTimeMillis(), copiedStacks);
-        DATABASE.computeIfAbsent(dimension, k -> new HashMap<>()).put(pos, snapshot);
+        ContainerSnapshot snapshot = new ContainerSnapshot(blockName, capacity, copiedStacks, System.currentTimeMillis());
+        CONTAINER_ENTRIES_MAP.computeIfAbsent(dimension, k -> new HashMap<>()).put(pos, snapshot);
 
-        serializer.write(DATABASE);
+        serializer.write(CONTAINER_ENTRIES_MAP);
         rebuildIndex();
     }
 
     public void remove(String dimension, BlockPos pos) {
-        if (DATABASE.containsKey(dimension)) {
-            DATABASE.get(dimension).remove(pos);
-            serializer.write(DATABASE);
+        if (CONTAINER_ENTRIES_MAP.containsKey(dimension)) {
+            CONTAINER_ENTRIES_MAP.get(dimension).remove(pos);
+            serializer.write(CONTAINER_ENTRIES_MAP);
             rebuildIndex();
         }
     }
@@ -58,7 +58,7 @@ public class ContainerRepository {
     public void rebuildIndex() {
         SEARCH_INDEX.clear();
 
-        for (var dimEntry : DATABASE.entrySet()) {
+        for (var dimEntry : CONTAINER_ENTRIES_MAP.entrySet()) {
             String dimension = dimEntry.getKey();
 
             for (var posEntry : dimEntry.getValue().entrySet()) {
@@ -86,6 +86,7 @@ public class ContainerRepository {
                             pos,
                             dimension,
                             snapshot.containerName(),
+                            snapshot.containerCapacity(),
                             snapshot.timestamp()
                     ));
                 }
@@ -104,7 +105,7 @@ public class ContainerRepository {
      * Used by NbtPersistence to save the raw data.
      */
     public Map<String, Map<BlockPos, ContainerSnapshot>> getDatabase() {
-        return DATABASE;
+        return CONTAINER_ENTRIES_MAP;
     }
 
 }

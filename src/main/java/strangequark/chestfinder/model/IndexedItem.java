@@ -12,6 +12,7 @@ public record IndexedItem(
         BlockPos pos,
         String dimension,
         String containerName,
+        int containerCapacity,
         long timestamp
 ) {
 }

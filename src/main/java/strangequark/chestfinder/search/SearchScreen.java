@@ -20,12 +20,7 @@ import strangequark.chestfinder.repository.ContainerRepository;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SearchScreenOwo extends BaseOwoScreen<FlowLayout> {
-
-    // ==========================================
-    //               CONFIGURATION
-    // ==========================================
-
+public class SearchScreen extends BaseOwoScreen<FlowLayout> {
     public static final int COMPONENT_SIZE = 24;
     public static final int GAP_SIZE = 4;
     public static final int SCROLLBAR_WIDTH = 16;
@@ -33,15 +28,12 @@ public class SearchScreenOwo extends BaseOwoScreen<FlowLayout> {
     public static final int SEARCH_WIDTH = 250;
     public static final int COLOR_BORDER_GRID = 0xFF555555;
 
-    // ==========================================
-
     private final ContainerRepository repository;
-    private ScrollContainer<Component> scrollContainer;
     private FlowLayout rootComponent;
     private FlowLayout scrollContent;
     private TextBoxComponent searchField;
 
-    public SearchScreenOwo(ContainerRepository repository) {
+    public SearchScreen(ContainerRepository repository) {
         this.repository = repository;
     }
 
@@ -89,13 +81,13 @@ public class SearchScreenOwo extends BaseOwoScreen<FlowLayout> {
         this.scrollContent.horizontalAlignment(HorizontalAlignment.CENTER);
         this.scrollContent.padding(Insets.right(4));
 
-        this.scrollContainer = Containers.verticalScroll(
+        ScrollContainer<Component> scrollContainer = Containers.verticalScroll(
                 Sizing.fill(100),
                 Sizing.fill(100),
                 this.scrollContent
         );
-        this.scrollContainer.scrollbarThiccness(8).scrollbar(ScrollContainer.Scrollbar.vanillaFlat());
-        gridWrapper.child(this.scrollContainer);
+        scrollContainer.scrollbarThiccness(8).scrollbar(ScrollContainer.Scrollbar.vanillaFlat());
+        gridWrapper.child(scrollContainer);
 
         // --- 4. FOOTER ---
         FlowLayout footer = Containers.horizontalFlow(Sizing.fill(100), Sizing.content());
@@ -137,9 +129,8 @@ public class SearchScreenOwo extends BaseOwoScreen<FlowLayout> {
 
         for (IndexedItem item : indexedItems) {
             String itemName = item.stack().getName().getString().toLowerCase();
-            String containerName = item.containerName().toLowerCase();
 
-            if (query.isEmpty() || itemName.contains(lowerQuery) || containerName.contains(lowerQuery)) {
+            if (query.isEmpty() || itemName.contains(lowerQuery)) {
                 filteredItems.add(item);
             }
         }
@@ -181,12 +172,6 @@ public class SearchScreenOwo extends BaseOwoScreen<FlowLayout> {
     public void resize(MinecraftClient client, int width, int height) {
         super.resize(client, width, height);
         this.refreshGrid(this.searchField.getText());
-    }
-
-    @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        super.render(context, mouseX, mouseY, delta);
-        //this.uiAdapter.drawTooltip(context, mouseX, mouseY, delta);
     }
 
     @Override

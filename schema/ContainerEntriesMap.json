@@ -1,0 +1,9 @@
+{
+  "[Dimension(String)]":{
+    "[BlockPos(LongString)]":{
+      "name":"ContainerName",
+      "time":"Long",
+      "items":["{ItemStack nbt}"]
+    }
+  }
+}

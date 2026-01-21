@@ -72,12 +72,11 @@ public class ItemSlot extends StackLayout {
 
         lines.add(Text.empty()); // Spacer
 
-        // Container: Chest
-        // FIX: Using .getString() or just passing the Text object avoids the 'translation{key=...}' bug
+        // Container
         lines.add(Text.literal("Container: ").formatted(Formatting.GRAY)
                 .append(Text.translatable(indexedItem.containerName()).formatted(Formatting.WHITE)));
 
-        // Location: 0, 0, 0 (3.5 blocks away)
+        // Location
         double dist = Math.sqrt(client.player.getBlockPos().getSquaredDistance(indexedItem.pos()));
         String posStr = String.format("%d, %d, %d", indexedItem.pos().getX(), indexedItem.pos().getY(), indexedItem.pos().getZ());
 
@@ -85,7 +84,7 @@ public class ItemSlot extends StackLayout {
                 .append(Text.literal(posStr).formatted(Formatting.AQUA))
                 .append(Text.literal(String.format(" (%.1f blocks away)", dist)).formatted(Formatting.YELLOW)));
 
-        // Dimension: overworld
+        // Dimension
         lines.add(Text.literal("Dimension: ").formatted(Formatting.GRAY)
                 .append(Text.literal(indexedItem.dimension()).formatted(Formatting.LIGHT_PURPLE)));
 

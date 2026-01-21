@@ -1,0 +1,8 @@
+{
+  "stack": "{ItemStack}",
+  "pos": "{BlockPos}",
+  "dimension": "String",
+  "containerName": "String",
+  "containerCapacity": "Int",
+  "timestamp": "Long"
+}

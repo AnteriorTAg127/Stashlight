@@ -1,0 +1,6 @@
+{
+  "containerName": "String",
+  "containerCapacity": "Int",
+  "items": ["{ItemStack}"],
+  "timestamp": "Long"
+}
