@@ -9,7 +9,6 @@ import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.BlockWithEntity;
-import net.minecraft.block.ChestBlock;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
@@ -18,7 +17,6 @@ import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.inventory.DoubleInventory;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
@@ -33,6 +31,7 @@ import org.slf4j.LoggerFactory;
 import strangequark.chestfinder.repository.ContainerRepository;
 import strangequark.chestfinder.screen.SearchScreen;
 import strangequark.chestfinder.serializer.Serializer;
+import strangequark.chestfinder.util.Util;
 
 public class ChestFinder implements ClientModInitializer {
     public static final String MOD_ID = "chestfinder";
@@ -49,7 +48,6 @@ public class ChestFinder implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         Init.init();
-
         UseBlockCallback.EVENT.register(this::onBlockUsed);
         ScreenEvents.AFTER_INIT.register(this::onScreenInit);
 
@@ -83,19 +81,6 @@ public class ChestFinder implements ClientModInitializer {
         });
     }
 
-    @SuppressWarnings("SameReturnValue")
-    private boolean onBlockBreak(World world, PlayerEntity playerEntity, BlockPos blockPos, BlockState blockState, @Nullable BlockEntity blockEntity) {
-        if (repository == null || !(blockState.getBlock() instanceof ChestBlock)) {
-            return true;
-        }
-
-        // Use the same canonical resolution used during saving to find the correct database key to delete.
-        BlockPos canonicalPos = getCanonicalChestPos(world, blockPos);
-        String dimension = world.getRegistryKey().getValue().toString();
-        repository.remove(dimension, canonicalPos);
-        return true;
-    }
-
     private ActionResult onBlockUsed(PlayerEntity playerEntity, World world, Hand hand, BlockHitResult blockHitResult) {
         BlockPos pos = blockHitResult.getBlockPos();
         BlockState state = world.getBlockState(pos);
@@ -104,6 +89,20 @@ public class ChestFinder implements ClientModInitializer {
         }
         return ActionResult.PASS;
     }
+
+    @SuppressWarnings("SameReturnValue")
+    private boolean onBlockBreak(World world, PlayerEntity playerEntity, BlockPos blockPos, BlockState blockState, @Nullable BlockEntity blockEntity) {
+        if (repository == null || !(blockState.getBlock() instanceof BlockWithEntity)) {
+            return true;
+        }
+
+        // Use the canonical resolution to find the correct database key to delete.
+        BlockPos canonicalPos = Util.getCanonicalPos(world, blockPos);
+        String dimension = Util.getDimensionName(world);
+        repository.remove(dimension, canonicalPos);
+        return true;
+    }
+
 
     private void onScreenInit(MinecraftClient client, Screen screen, int w, int h) {
         if (screen instanceof CreativeInventoryScreen || client.world == null) {
@@ -126,49 +125,25 @@ public class ChestFinder implements ClientModInitializer {
         int containerSize = stacks.size() - 36; // Standard survival inventory assumption
         if (containerSize <= 0) return;
 
-        String dimension = client.world.getRegistryKey().getValue().toString();
         BlockPos raw = lastOpened;
-        BlockPos canonical = getCanonicalChestPos(client.world, raw);
+        String dimension = Util.getDimensionName(client.world);
+        BlockPos canonicalPos = Util.getCanonicalPos(client.world, raw);
 
         // INVARIANT: Always nuke both 'raw' and 'canonical' keys.
         // This handles cases where a single chest was just merged into a double chest,
         // or a double chest was split, ensuring no "ghost" records remain at the old coordinates.
         repository.remove(dimension, raw);
-        repository.remove(dimension, canonical);
+        repository.remove(dimension, canonicalPos);
 
-        BlockState state = client.world.getBlockState(canonical);
+        BlockState state = client.world.getBlockState(canonicalPos);
         repository.update(
                 dimension,
-                canonical,
+                canonicalPos,
                 state.getBlock().getName().getString(),
                 containerSize,
                 stacks.subList(0, containerSize)
         );
 
         lastOpened = null;
-    }
-
-    private BlockPos getCanonicalChestPos(World world, BlockPos pos) {
-        BlockState state = world.getBlockState(pos);
-        if (!(state.getBlock() instanceof ChestBlock chest)) return pos;
-
-        // Ask the vanilla ChestBlock to resolve the inventory. This is our Source of Truth.
-        var inv = ChestBlock.getInventory(chest, state, world, pos, true);
-
-        if (inv instanceof DoubleInventory di) {
-            try {
-                // We use reflection to find the 'first' half of the DoubleInventory.
-                // This aligns our database key with Minecraft's internal 'Master' half.
-                var f = DoubleInventory.class.getDeclaredField("first");
-                f.setAccessible(true);
-                var first = f.get(di);
-                if (first instanceof BlockEntity be) {
-                    return be.getPos();
-                }
-            } catch (ReflectiveOperationException ignored) {
-            }
-        }
-
-        return pos;
     }
 }

@@ -2,6 +2,7 @@ package strangequark.chestfinder.logic.sort;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.util.math.BlockPos;
+import strangequark.chestfinder.gui.UIStyle;
 import strangequark.chestfinder.model.IndexedItem;
 
 import java.util.List;
@@ -9,7 +10,12 @@ import java.util.List;
 public class DistanceSort implements SortStrategy {
     @Override
     public String getLabel() {
-        return "D";
+        return UIStyle.ICON_DIST;
+    }
+
+    @Override
+    public String getTooltip() {
+        return "Sort by Distance";
     }
 
     @Override

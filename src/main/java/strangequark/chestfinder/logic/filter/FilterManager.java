@@ -5,7 +5,7 @@ import java.util.List;
 
 public class FilterManager {
     private final List<FilterStrategy> strategies = new ArrayList<>();
-    private int currentIndex = 0;
+    private int currentIndex;
 
     public void setStrategies(List<FilterStrategy> newStrategies) {
         this.strategies.clear();

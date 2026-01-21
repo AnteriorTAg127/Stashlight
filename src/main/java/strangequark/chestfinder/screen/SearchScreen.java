@@ -21,26 +21,14 @@ import strangequark.chestfinder.logic.filter.FilterStrategy;
 import strangequark.chestfinder.logic.sort.SortManager;
 import strangequark.chestfinder.model.IndexedItem;
 import strangequark.chestfinder.repository.ContainerRepository;
+import strangequark.chestfinder.util.Util;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import static strangequark.chestfinder.gui.UIStyle.*;
+
 public class SearchScreen extends BaseOwoScreen<FlowLayout> {
-
-    // --- Tailwind-aligned spacing constants ---
-    private static final int SIZE_XXXS = 4;
-    private static final int SIZE_XXS = 8;
-    private static final int SIZE_XS = 12;
-    private static final int SIZE_S = 16;
-    private static final int SIZE_M = 24;
-    private static final int SIZE_L = 32;
-    private static final int SIZE_XL = 40;
-    private static final int SIZE_XXL = 48;
-    private static final int SIZE_XXXL = 64;
-
-    private static final int COLOR_BORDER_GRID = 0xFF555555;
-    private static final int SCROLLBAR_SIZE = SIZE_XXS;
-    private static final int SCREEN_FILL_PCT = 95;
 
     private final ContainerRepository repository;
     private FlowLayout rootComponent;
@@ -58,20 +46,16 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
     private void setupFilters() {
         List<FilterStrategy> strategies = new ArrayList<>();
         var world = MinecraftClient.getInstance().world;
-        String currentDim = null;
+        String currentDim;
 
         if (world != null) {
-            currentDim = world.getRegistryKey().getValue().toString();
+            currentDim = Util.getDimensionName(world);
             strategies.add(new DimensionFilter("Current", currentDim));
         }
 
         strategies.add(new DimensionFilter("All", null));
 
-        final String finalCurrentDim = currentDim;
-        repository.getContainerEntriesMap().keySet().stream()
-                .filter(dim -> !dim.equals(finalCurrentDim))
-                .sorted()
-                .forEach(dim -> strategies.add(new DimensionFilter(dim, dim)));
+        repository.getContainerEntriesMap().keySet().forEach(dim -> strategies.add(new DimensionFilter(dim, dim)));
 
         filterManager.setStrategies(strategies);
     }
@@ -95,30 +79,32 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
 
         // --- 1. MAIN WINDOW ---
         FlowLayout mainWindow = (FlowLayout) Containers
-                .verticalFlow(Sizing.fill(SCREEN_FILL_PCT), Sizing.fill(SCREEN_FILL_PCT))
-                .gap(SIZE_XXS)
+                .verticalFlow(Sizing.fill(SCREEN_FILL_PERCENT), Sizing.fill(SCREEN_FILL_PERCENT))
+                .gap(GAP)
                 .surface(Surface.VANILLA_TRANSLUCENT)
                 .horizontalAlignment(HorizontalAlignment.CENTER)
                 .verticalAlignment(VerticalAlignment.TOP)
-                .padding(Insets.of(SIZE_XXS));
+                .padding(Insets.of(PADDING));
 
         // --- 2. HEADER & SEARCH BAR ---
         LabelComponent title = Components.label(Text.of("Search Containers")).shadow(true);
 
         FlowLayout searchBar = (FlowLayout) Containers
-                .horizontalFlow(Sizing.fill(), Sizing.fixed(SIZE_M))
-                .gap(SIZE_XXS)
+                .horizontalFlow(Sizing.fill(), Sizing.fixed(COMPONENT_HEIGHT))
+                .gap(GAP)
                 .alignment(HorizontalAlignment.CENTER, VerticalAlignment.CENTER);
 
         ButtonComponent sortBtn = (ButtonComponent) Components
                 .button(Text.of(sortManager.getCurrent().getLabel()), b -> {
                     sortManager.cycle();
                     b.setMessage(Text.of(sortManager.getCurrent().getLabel()));
+                    b.tooltip(Text.of(sortManager.getCurrent().getTooltip()));
                     refreshGrid(searchField.getText());
                 })
-                .sizing(Sizing.fixed(SIZE_XL / 2));
+                .tooltip(Text.of(sortManager.getCurrent().getTooltip()))
+                .sizing(Sizing.fixed(COMPONENT_HEIGHT), Sizing.fixed(COMPONENT_HEIGHT));
 
-        this.searchField = Components.textBox(Sizing.fixed(SIZE_XXXL * 4));
+        this.searchField = Components.textBox(Sizing.fixed(SEARCH_WIDTH));
         this.searchField.setMaxLength(100);
         this.searchField.onChanged().subscribe(this::refreshGrid);
 
@@ -126,22 +112,32 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
 
         // --- 3. SCROLLABLE GRID ---
         FlowLayout gridWrapper = (FlowLayout) Containers.verticalFlow(Sizing.fill(100), Sizing.expand(100))
-                .surface(Surface.outline(COLOR_BORDER_GRID));
+                .surface(Surface.outline(GRID_BORDER))
+                .padding(Insets.of(BORDER));
 
         this.scrollContent = (FlowLayout) Containers.verticalFlow(Sizing.content(), Sizing.content())
-                .padding(Insets.right(SIZE_XXXS))
+                .padding(Insets.right(GAP))
                 .horizontalAlignment(HorizontalAlignment.CENTER);
 
-        ScrollContainer<FlowLayout> scrollContainer = Containers.verticalScroll(
-                        Sizing.fill(100), Sizing.fill(100), this.scrollContent)
-                .scrollbarThiccness(SCROLLBAR_SIZE)
-                .scrollbar(ScrollContainer.Scrollbar.vanillaFlat());
+        ScrollContainer<FlowLayout> scrollContainer = Containers
+                .verticalScroll(Sizing.fill(100), Sizing.fill(100), this.scrollContent);
+
+        scrollContainer
+                .scrollbarThiccness(SCROLL_WIDTH)
+                .scrollbar(ScrollContainer.Scrollbar.vanillaFlat())
+                .surface((drawContext, component) -> {
+                    int x1 = component.x() + component.width() - SCROLL_WIDTH;
+                    int y1 = component.y();
+                    int x2 = component.x() + component.width();
+                    int y2 = component.y() + component.height();
+                    drawContext.fill(x1, y1, x2, y2, SCROLL_TRACK);
+                });
 
         gridWrapper.child(scrollContainer);
 
         // --- 4. FOOTER ---
-        FlowLayout footer = (FlowLayout) Containers.horizontalFlow(Sizing.fill(100), Sizing.fixed(SIZE_M))
-                .gap(SIZE_XXS)
+        FlowLayout footer = (FlowLayout) Containers.horizontalFlow(Sizing.fill(100), Sizing.fixed(COMPONENT_HEIGHT))
+                .gap(GAP)
                 .verticalAlignment(VerticalAlignment.CENTER);
 
         ButtonComponent dimFilterBtn = (ButtonComponent) Components.button(
@@ -151,10 +147,10 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
                             b.setMessage(Text.of("Dimension: " + filterManager.getCurrent().getLabel()));
                             refreshGrid(searchField.getText());
                         })
-                .sizing(Sizing.fixed(SIZE_XXXL * 2), Sizing.fixed(SIZE_XL / 2));
+                .sizing(Sizing.fixed(FILTER_WIDTH), Sizing.fixed(COMPONENT_HEIGHT));
 
         var checkbox = Components.checkbox(Text.of("Look at target"));
-        checkbox.margins(Insets.top(SIZE_XXXS / 2));
+        checkbox.margins(Insets.top(BORDER));
 
         footer.child(dimFilterBtn).child(checkbox);
 
@@ -168,12 +164,11 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
     private void refreshGrid(String query) {
         this.scrollContent.clearChildren();
 
-        int windowWidth = (int) (this.width * (SCREEN_FILL_PCT / 100.0));
-        // Padding (XXS * 2) + Scrollbar + Gap
-        int availableWidth = windowWidth - (SIZE_XXS * 2) - (SCROLLBAR_SIZE * 2) - SIZE_XXS;
+        int windowWidth = (int) (this.width * (SCREEN_FILL_PERCENT / 100.0));
+        // Total available horizontal space minus padding and scrollbar area
+        int availableWidth = windowWidth - (PADDING * 2) - (SCROLL_WIDTH + GAP);
 
-        // Slot size (M) + Gap (XXXS)
-        int itemFootprint = SIZE_M + SIZE_XXXS;
+        int itemFootprint = SLOT_SIZE + GAP;
         int slotsPerRow = Math.max(1, availableWidth / itemFootprint);
 
         List<IndexedItem> filteredItems = repository.getSearchIndex().stream()
@@ -187,10 +182,10 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
 
         int rows = (int) Math.ceil((double) sortedItems.size() / slotsPerRow);
         GridLayout grid = (GridLayout) Containers.grid(Sizing.fill(100), Sizing.content(), rows, slotsPerRow)
-                .margins(Insets.of(SIZE_XXXS / 2));
+                .margins(Insets.of(GAP / 2));
 
         for (int i = 0; i < sortedItems.size(); i++) {
-            grid.child(ItemSlot.of(sortedItems.get(i)).margins(Insets.of(SIZE_XXXS / 2)), i / slotsPerRow, i % slotsPerRow);
+            grid.child(ItemSlot.of(sortedItems.get(i)).margins(Insets.of(GAP / 2)), i / slotsPerRow, i % slotsPerRow);
         }
 
         this.scrollContent.child(grid);

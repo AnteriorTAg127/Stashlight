@@ -16,6 +16,8 @@ import strangequark.chestfinder.model.IndexedItem;
 import java.util.ArrayList;
 import java.util.List;
 
+import static strangequark.chestfinder.gui.UIStyle.SLOT_SIZE;
+
 public class ItemSlot extends StackLayout {
     private final IndexedItem indexedItem;
     private static final Surface BASE_SURFACE = Surface.flat(0x55888888);
@@ -26,7 +28,7 @@ public class ItemSlot extends StackLayout {
     }
 
     protected ItemSlot(IndexedItem indexedItem) {
-        super(Sizing.fixed(24), Sizing.fixed(24));
+        super(Sizing.fixed(SLOT_SIZE), Sizing.fixed(SLOT_SIZE));
         this.indexedItem = indexedItem;
         ItemStack stack = indexedItem.stack();
 
@@ -34,7 +36,7 @@ public class ItemSlot extends StackLayout {
         itemdisplay.showOverlay(false).sizing(Sizing.fill(85));
 
         int count = stack.getCount();
-        var scale = count > 1000 ? 0.75f : 0.85f;
+        var scale = count > 999 ? 0.75f : 0.85f;
 
         QuantityLabel countLabel = QuantityLabel.of(Text.literal(String.valueOf(count)));
         countLabel.positioning(Positioning.relative(90, 90));

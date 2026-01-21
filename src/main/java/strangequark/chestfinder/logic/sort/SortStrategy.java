@@ -7,5 +7,7 @@ import java.util.List;
 public interface SortStrategy {
     String getLabel();
 
+    String getTooltip();
+
     void sort(List<IndexedItem> items);
 }

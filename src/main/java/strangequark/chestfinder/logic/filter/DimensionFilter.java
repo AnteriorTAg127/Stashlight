@@ -4,7 +4,7 @@ import strangequark.chestfinder.model.IndexedItem;
 
 public class DimensionFilter implements FilterStrategy {
     private final String label;
-    private final String dimension; // The full string (e.g., "minecraft:overworld")
+    private final String dimension;
 
     public DimensionFilter(String label, String dimension) {
         this.label = label;

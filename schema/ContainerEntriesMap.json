@@ -1,9 +1,5 @@
 {
-  "[Dimension(String)]":{
-    "[BlockPos(LongString)]":{
-      "name":"ContainerName",
-      "time":"Long",
-      "items":["{ItemStack nbt}"]
-    }
+  "[Dimension(String)]": {
+    "[BlockPos(LongString)]": "{ContainerSnapshot}"
   }
 }

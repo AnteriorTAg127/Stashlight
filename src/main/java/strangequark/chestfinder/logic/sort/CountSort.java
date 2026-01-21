@@ -1,5 +1,6 @@
 package strangequark.chestfinder.logic.sort;
 
+import strangequark.chestfinder.gui.UIStyle;
 import strangequark.chestfinder.model.IndexedItem;
 
 import java.util.List;
@@ -7,7 +8,12 @@ import java.util.List;
 public class CountSort implements SortStrategy {
     @Override
     public String getLabel() {
-        return "#";
+        return UIStyle.ICON_COUNT;
+    }
+
+    @Override
+    public String getTooltip() {
+        return "Sort by Count";
     }
 
     @Override
