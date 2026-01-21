@@ -1,4 +1,4 @@
-package strangequark.chestfinder.search;
+package strangequark.chestfinder.screen;
 
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.Components;
