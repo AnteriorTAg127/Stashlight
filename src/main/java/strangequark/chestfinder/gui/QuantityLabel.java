@@ -30,10 +30,6 @@ public class QuantityLabel extends LabelComponent {
         return this;
     }
 
-    public float scale() {
-        return this.scale;
-    }
-
     // 5. Override draw() to apply scaling transformation
     @Override
     public void draw(OwoUIDrawContext context, int mouseX, int mouseY, float partialTicks, float delta) {

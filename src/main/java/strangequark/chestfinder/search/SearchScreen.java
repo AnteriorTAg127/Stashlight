@@ -25,7 +25,7 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
     public static final int GAP_SIZE = 4;
     public static final int SCROLLBAR_WIDTH = 16;
     public static final int PADDING_MAIN = 8;
-    public static final int SEARCH_WIDTH = 250;
+    public static final int SEARCH_WIDTH = 300;
     public static final int COLOR_BORDER_GRID = 0xFF555555;
 
     private final ContainerRepository repository;
@@ -63,7 +63,7 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
                 .padding(Insets.of(PADDING_MAIN));
 
         // --- 2. HEADER ---
-        LabelComponent title = Components.label(Text.of("Search in Containers"));
+        LabelComponent title = Components.label(Text.of("Search Containers"));
         title.shadow(true);
         title.margins(Insets.bottom(5));
 

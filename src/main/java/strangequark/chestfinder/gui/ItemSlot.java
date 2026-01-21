@@ -42,7 +42,9 @@ public class ItemSlot extends StackLayout {
         this.surface(BASE_SURFACE).alignment(HorizontalAlignment.CENTER, VerticalAlignment.CENTER);
 
         this.child(itemdisplay);
-        this.child(countLabel.scale(scale));
+        if (count > 1) {
+            this.child(countLabel.scale(scale));
+        }
     }
 
     @Override

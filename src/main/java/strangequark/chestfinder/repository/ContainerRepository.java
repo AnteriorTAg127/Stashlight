@@ -94,17 +94,12 @@ public class ContainerRepository {
         }
     }
 
-    /**
-     * Used by SearchScreenOwo to get the pre-computed items.
-     */
     public List<IndexedItem> getSearchIndex() {
         return SEARCH_INDEX;
     }
 
-    /**
-     * Used by NbtPersistence to save the raw data.
-     */
-    public Map<String, Map<BlockPos, ContainerSnapshot>> getDatabase() {
+
+    public Map<String, Map<BlockPos, ContainerSnapshot>> getContainerEntriesMap() {
         return CONTAINER_ENTRIES_MAP;
     }
 

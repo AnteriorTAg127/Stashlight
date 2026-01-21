@@ -23,8 +23,7 @@ public class Serializer {
         this.file = file;
         this.lookup = lookup;
     }
-
-
+    
     public Map<String, Map<BlockPos, ContainerSnapshot>> read() {
         Map<String, Map<BlockPos, ContainerSnapshot>> database = new HashMap<>();
         if (file == null || !Files.exists(file)) return database;
