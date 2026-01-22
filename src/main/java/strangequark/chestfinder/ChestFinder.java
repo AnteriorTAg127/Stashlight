@@ -10,6 +10,7 @@ import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.BlockWithEntity;
+import net.minecraft.block.EnchantingTableBlock;
 import net.minecraft.block.EnderChestBlock;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.client.MinecraftClient;
@@ -130,7 +131,7 @@ public class ChestFinder implements ClientModInitializer {
 
         BlockState state = client.world.getBlockState(canonicalPos);
 
-        if (!(state.getBlock() instanceof BlockWithEntity) || state.getBlock() instanceof EnderChestBlock) {
+        if (!(state.getBlock() instanceof BlockWithEntity) || state.getBlock() instanceof EnderChestBlock || state.getBlock() instanceof EnchantingTableBlock) {
             lastOpened = null;
             return;
         }
