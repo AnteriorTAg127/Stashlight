@@ -4,11 +4,13 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.BlockWithEntity;
+import net.minecraft.block.EnderChestBlock;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
@@ -28,6 +30,7 @@ import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import strangequark.chestfinder.render.HighlightRenderer;
 import strangequark.chestfinder.repository.ContainerRepository;
 import strangequark.chestfinder.screen.SearchScreen;
 import strangequark.chestfinder.serializer.Serializer;
@@ -49,10 +52,10 @@ public class ChestFinder implements ClientModInitializer {
     public void onInitializeClient() {
         Init.init();
         UseBlockCallback.EVENT.register(this::onBlockUsed);
-        ScreenEvents.AFTER_INIT.register(this::onScreenInit);
-
         // BEFORE is critical: we must resolve the chest's identity while it still exists in the world.
         PlayerBlockBreakEvents.BEFORE.register(this::onBlockBreak);
+        ScreenEvents.AFTER_INIT.register(this::onScreenInit);
+        WorldRenderEvents.AFTER_ENTITIES.register(HighlightRenderer::render);
 
         searchKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "Search",
@@ -105,7 +108,7 @@ public class ChestFinder implements ClientModInitializer {
 
 
     private void onScreenInit(MinecraftClient client, Screen screen, int w, int h) {
-        if (screen instanceof CreativeInventoryScreen || client.world == null) {
+        if (client.world == null || screen instanceof CreativeInventoryScreen) {
             return;
         }
 
@@ -121,21 +124,28 @@ public class ChestFinder implements ClientModInitializer {
             return;
         }
 
+        BlockPos rawPos = lastOpened;
+        BlockPos canonicalPos = Util.getCanonicalPos(client.world, rawPos);
+        String dimension = Util.getDimensionName(client.world);
+
+        BlockState state = client.world.getBlockState(canonicalPos);
+
+        if (!(state.getBlock() instanceof BlockWithEntity) || state.getBlock() instanceof EnderChestBlock) {
+            lastOpened = null;
+            return;
+        }
+
         var stacks = handler.getStacks();
         int containerSize = stacks.size() - 36; // Standard survival inventory assumption
         if (containerSize <= 0) return;
 
-        BlockPos raw = lastOpened;
-        String dimension = Util.getDimensionName(client.world);
-        BlockPos canonicalPos = Util.getCanonicalPos(client.world, raw);
 
         // INVARIANT: Always nuke both 'raw' and 'canonical' keys.
         // This handles cases where a single chest was just merged into a double chest,
         // or a double chest was split, ensuring no "ghost" records remain at the old coordinates.
-        repository.remove(dimension, raw);
+        repository.remove(dimension, rawPos);
         repository.remove(dimension, canonicalPos);
 
-        BlockState state = client.world.getBlockState(canonicalPos);
         repository.update(
                 dimension,
                 canonicalPos,

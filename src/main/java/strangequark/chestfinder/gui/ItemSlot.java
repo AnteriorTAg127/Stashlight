@@ -5,13 +5,17 @@ import io.wispforest.owo.ui.component.ItemComponent;
 import io.wispforest.owo.ui.container.StackLayout;
 import io.wispforest.owo.ui.core.*;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.Click;
 import net.minecraft.component.DataComponentTypes;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.tooltip.TooltipType;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.math.BlockPos;
 import strangequark.chestfinder.model.IndexedItem;
+import strangequark.chestfinder.render.HighlightManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -101,5 +105,40 @@ public class ItemSlot extends StackLayout {
                 mouseY,
                 this.indexedItem.stack().get(DataComponentTypes.TOOLTIP_STYLE)
         );
+    }
+
+    @Override
+    public boolean onMouseDown(Click click, boolean doubled) {
+        if (click.button() != 0) {
+            return super.onMouseDown(click, doubled);
+        }
+
+        var client = MinecraftClient.getInstance();
+        var player = client.player;
+        if (player == null) {
+            return true;
+        }
+
+        boolean highlighted = HighlightManager.tryHighlight(indexedItem);
+        if (!highlighted) {
+            return true;
+        }
+
+        lookAt(player, indexedItem.pos());
+        client.setScreen(null);
+        return true;
+    }
+
+    private void lookAt(PlayerEntity player, BlockPos target) {
+        double d = target.getX() + 0.5 - player.getX();
+        double e = target.getY() + 0.5 - player.getEyeY();
+        double f = target.getZ() + 0.5 - player.getZ();
+        double g = Math.sqrt(d * d + f * f);
+
+        float yaw = (float) (Math.atan2(f, d) * 180.0 / Math.PI) - 90.0f;
+        float pitch = (float) (-(Math.atan2(e, g) * 180.0 / Math.PI));
+
+        player.setYaw(yaw);
+        player.setPitch(pitch);
     }
 }
