@@ -4,7 +4,6 @@ package strangequark.chestfinder;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ServerInfo;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -13,9 +12,10 @@ import java.nio.file.Path;
 public final class Init {
     private static Path ROOT;
 
+
     public static void init() {
         if (FabricLoader.getInstance().getEnvironmentType() != EnvType.CLIENT) {
-            return;
+            throw new IllegalStateException("ChestFinder initialized outside client");
         }
 
         ROOT = FabricLoader.getInstance()
@@ -25,7 +25,7 @@ public final class Init {
         try {
             Files.createDirectories(ROOT);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Failed to create ChestFinder cache dir", e);
         }
     }
 
@@ -34,22 +34,20 @@ public final class Init {
         String fileName;
 
         if (client.isInSingleplayer()) {
-            if (client.getServer() == null) return null;
+            var server = client.getServer();
+            if (server == null) {
+                throw new IllegalStateException("Singleplayer server missing");
+            }
 
-            String id = client.getServer()
-                    .getSaveProperties()
-                    .getLevelName()
-                    .replaceAll("[^a-zA-Z0-9-_]", "_");
-
-            fileName = id + ".dat";
+            fileName = server.getSaveProperties().getLevelName().replaceAll("[^a-zA-Z0-9-_]", "_");
         } else {
-            ServerInfo info = client.getCurrentServerEntry();
-            if (info == null) return null;
-
-            String norm = info.address.replace(':', '_').replace('/', '_');
-            fileName = "MP_" + norm + ".dat";
+            var info = client.getCurrentServerEntry();
+            if (info == null) {
+                throw new IllegalStateException("Multiplayer server info missing");
+            }
+            fileName = "MP_" + info.address.replace(':', '_').replace('/', '_');
         }
 
-        return ROOT.resolve(fileName);
+        return ROOT.resolve(fileName + ".dat");
     }
 }
