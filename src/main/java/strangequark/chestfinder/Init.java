@@ -4,6 +4,7 @@ package strangequark.chestfinder;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.util.WorldSavePath;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -38,8 +39,12 @@ public final class Init {
             if (server == null) {
                 throw new IllegalStateException("Singleplayer server missing");
             }
+            Path worldFolder = server.getSavePath(WorldSavePath.ROOT).normalize();
 
-            fileName = server.getSaveProperties().getLevelName().replaceAll("[^a-zA-Z0-9-_]", "_");
+            fileName = worldFolder.getFileName().toString()
+                    .replace(" ", "_")
+                    .replace("(", "_")
+                    .replace(")", "_");
         } else {
             var info = client.getCurrentServerEntry();
             if (info == null) {
