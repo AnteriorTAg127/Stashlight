@@ -1,11 +1,16 @@
 package strangequark.chestfinder.util;
 
 import net.minecraft.block.BlockState;
+import net.minecraft.block.BlockWithEntity;
 import net.minecraft.block.ChestBlock;
 import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.block.enums.ChestType;
 import net.minecraft.inventory.DoubleInventory;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.world.World;
+
+import java.util.Set;
 
 public class Util {
     public static String getDimensionName(World world) {
@@ -35,5 +40,35 @@ public class Util {
             }
         }
         return pos;
+    }
+
+    public static Set<BlockPos> resolveContainerPositions(World world, BlockPos pos) {
+        BlockState state = world.getBlockState(pos);
+
+        if (!(state.getBlock() instanceof BlockWithEntity)) {
+            return Set.of(pos);
+        }
+
+        if (state.getBlock() instanceof ChestBlock) {
+            ChestType type = state.get(ChestBlock.CHEST_TYPE);
+
+            if (type == ChestType.SINGLE) {
+                return Set.of(pos);
+            }
+
+            Direction facing = state.get(ChestBlock.FACING);
+            Direction offset =
+                    type == ChestType.LEFT
+                            ? facing.rotateYClockwise()
+                            : facing.rotateYCounterclockwise();
+
+            BlockPos other = pos.offset(offset);
+
+            if (world.getBlockState(other).getBlock() instanceof ChestBlock) {
+                return Set.of(pos, other);
+            }
+        }
+
+        return Set.of(pos);
     }
 }

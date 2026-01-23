@@ -8,10 +8,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.BlockWithEntity;
-import net.minecraft.block.EnchantingTableBlock;
-import net.minecraft.block.EnderChestBlock;
+import net.minecraft.block.*;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
@@ -36,6 +33,8 @@ import strangequark.chestfinder.repository.ContainerRepository;
 import strangequark.chestfinder.screen.SearchScreen;
 import strangequark.chestfinder.serializer.Serializer;
 import strangequark.chestfinder.util.Util;
+
+import java.util.Set;
 
 public class ChestFinder implements ClientModInitializer {
     public static final String MOD_ID = "chestfinder";
@@ -125,32 +124,34 @@ public class ChestFinder implements ClientModInitializer {
             return;
         }
 
-        BlockPos rawPos = lastOpened;
-        BlockPos canonicalPos = Util.getCanonicalPos(client.world, rawPos);
         String dimension = Util.getDimensionName(client.world);
+        Set<BlockPos> pair = Util.resolveContainerPositions(client.world, lastOpened);
+        BlockPos canonicalPos = Util.getCanonicalPos(client.world, pair.iterator().next());
+        Block block = client.world.getBlockState(canonicalPos).getBlock();
 
-        BlockState state = client.world.getBlockState(canonicalPos);
-
-        if (!(state.getBlock() instanceof BlockWithEntity) || state.getBlock() instanceof EnderChestBlock || state.getBlock() instanceof EnchantingTableBlock) {
+        if (!(block instanceof BlockWithEntity) || block instanceof EnderChestBlock || block instanceof EnchantingTableBlock || block instanceof BeaconBlock) {
             lastOpened = null;
             return;
         }
 
         var stacks = handler.getStacks();
-        int containerSize = stacks.size() - 36; // Standard survival inventory assumption
-        if (containerSize <= 0) return;
+        int containerSize = stacks.size() - 36;
+        if (containerSize <= 0) {
+            lastOpened = null;
+            return;
+        }
 
-
-        // INVARIANT: Always nuke both 'raw' and 'canonical' keys.
-        // This handles cases where a single chest was just merged into a double chest,
-        // or a double chest was split, ensuring no "ghost" records remain at the old coordinates.
-        repository.remove(dimension, rawPos);
+        // HARD INVALIDATION — nuke everything
         repository.remove(dimension, canonicalPos);
+        for (BlockPos p : pair) {
+            repository.remove(dimension, p);
+        }
 
+        // Single authoritative write
         repository.update(
                 dimension,
                 canonicalPos,
-                state.getBlock().getName().getString(),
+                block.getName().getString(),
                 containerSize,
                 stacks.subList(0, containerSize)
         );

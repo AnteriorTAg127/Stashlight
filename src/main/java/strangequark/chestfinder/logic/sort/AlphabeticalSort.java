@@ -7,8 +7,13 @@ import java.util.List;
 
 public class AlphabeticalSort implements SortStrategy {
     @Override
+    public SortKey key() {
+        return SortKey.ALPHABETICAL;
+    }
+
+    @Override
     public String getLabel() {
-        return UIStyle.ICON_NAME;
+        return UIStyle.SORT_NAME;
     }
 
     @Override

@@ -14,6 +14,7 @@ import net.minecraft.item.tooltip.TooltipType;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.math.BlockPos;
+import strangequark.chestfinder.config.Config;
 import strangequark.chestfinder.model.IndexedItem;
 import strangequark.chestfinder.render.HighlightManager;
 
@@ -123,8 +124,9 @@ public class ItemSlot extends StackLayout {
         if (!highlighted) {
             return true;
         }
-
-        lookAt(player, indexedItem.pos());
+        if (Config.get().lookAtTarget()) {
+            lookAt(player, indexedItem.pos());
+        }
         client.setScreen(null);
         return true;
     }

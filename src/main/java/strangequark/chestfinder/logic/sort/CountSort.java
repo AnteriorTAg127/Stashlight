@@ -7,8 +7,13 @@ import java.util.List;
 
 public class CountSort implements SortStrategy {
     @Override
+    public SortKey key() {
+        return SortKey.COUNT;
+    }
+
+    @Override
     public String getLabel() {
-        return UIStyle.ICON_COUNT;
+        return UIStyle.SORT_COUNT;
     }
 
     @Override

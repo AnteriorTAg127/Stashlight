@@ -1,9 +1,9 @@
 package strangequark.chestfinder.gui;
 
 public class UIStyle {
-    public static final String ICON_NAME = "Aa";
-    public static final String ICON_COUNT = "#↓";
-    public static final String ICON_DIST = "◎";
+    public static final String SORT_NAME = "Aa";
+    public static final String SORT_COUNT = "#↓";
+    public static final String SORT_DIST = "◎";
 
     public static final int GAP = 4;
     public static final int PADDING = 8;

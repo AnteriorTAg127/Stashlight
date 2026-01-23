@@ -1,10 +1,7 @@
 package strangequark.chestfinder.screen;
 
 import io.wispforest.owo.ui.base.BaseOwoScreen;
-import io.wispforest.owo.ui.component.ButtonComponent;
-import io.wispforest.owo.ui.component.Components;
-import io.wispforest.owo.ui.component.LabelComponent;
-import io.wispforest.owo.ui.component.TextBoxComponent;
+import io.wispforest.owo.ui.component.*;
 import io.wispforest.owo.ui.container.Containers;
 import io.wispforest.owo.ui.container.FlowLayout;
 import io.wispforest.owo.ui.container.GridLayout;
@@ -14,10 +11,12 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.text.Text;
 import org.jetbrains.annotations.NotNull;
+import strangequark.chestfinder.config.Config;
 import strangequark.chestfinder.gui.ItemSlot;
 import strangequark.chestfinder.logic.filter.DimensionFilter;
 import strangequark.chestfinder.logic.filter.FilterManager;
 import strangequark.chestfinder.logic.filter.FilterStrategy;
+import strangequark.chestfinder.logic.filter.SmallContainerFilter;
 import strangequark.chestfinder.logic.sort.SortManager;
 import strangequark.chestfinder.model.IndexedItem;
 import strangequark.chestfinder.repository.ContainerRepository;
@@ -36,10 +35,11 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
     private TextBoxComponent searchField;
 
     private final FilterManager filterManager = new FilterManager();
-    private final SortManager sortManager = new SortManager();
+    private final SortManager sortManager;
 
     public SearchScreen(ContainerRepository repository) {
         this.repository = repository;
+        this.sortManager = new SortManager(Config.get().sortKey());
         setupFilters();
     }
 
@@ -57,7 +57,8 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
 
         repository.getContainerEntriesMap().keySet().forEach(dim -> strategies.add(new DimensionFilter(dim, dim)));
 
-        filterManager.setStrategies(strategies);
+        filterManager.setCyclingStrategies(strategies);
+        filterManager.addAlwaysOn(new SmallContainerFilter());
     }
 
     @Override
@@ -70,12 +71,15 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
         super.init();
         if (this.rootComponent.focusHandler() != null && this.searchField.focusHandler() != null) {
             this.rootComponent.focusHandler().focus(this.searchField, Component.FocusSource.MOUSE_CLICK);
+            this.searchField.setSelectionStart(0);
+            this.searchField.setSelectionEnd(this.searchField.getText().length());
         }
     }
 
     @Override
     protected void build(FlowLayout rootComponent) {
         this.rootComponent = rootComponent;
+        var config = Config.get();
 
         // --- 1. MAIN WINDOW ---
         FlowLayout mainWindow = (FlowLayout) Containers
@@ -99,14 +103,18 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
                     sortManager.cycle();
                     b.setMessage(Text.of(sortManager.getCurrent().getLabel()));
                     b.tooltip(Text.of(sortManager.getCurrent().getTooltip()));
+                    config.setSortKey(sortManager.getCurrent().key());
                     refreshGrid(searchField.getText());
                 })
                 .tooltip(Text.of(sortManager.getCurrent().getTooltip()))
                 .sizing(Sizing.fixed(COMPONENT_HEIGHT), Sizing.fixed(COMPONENT_HEIGHT));
 
-        this.searchField = Components.textBox(Sizing.fixed(SEARCH_WIDTH));
+        this.searchField = Components.textBox(Sizing.fixed(SEARCH_WIDTH), config.searchQuery());
         this.searchField.setMaxLength(100);
-        this.searchField.onChanged().subscribe(this::refreshGrid);
+        this.searchField.onChanged().subscribe(text -> {
+            config.setSearchQuery(text);
+            refreshGrid(text);
+        });
 
         searchBar.child(sortBtn).child(this.searchField);
 
@@ -141,24 +149,36 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
                 .verticalAlignment(VerticalAlignment.CENTER);
 
         ButtonComponent dimFilterBtn = (ButtonComponent) Components.button(
-                        Text.of("Dimension: " + filterManager.getCurrent().getLabel()),
+                        Text.of("Dimension: " + filterManager.getCurrentLabel()),
                         b -> {
                             filterManager.cycle();
-                            b.setMessage(Text.of("Dimension: " + filterManager.getCurrent().getLabel()));
+                            b.setMessage(Text.of("Dimension: " + filterManager.getCurrentLabel()));
                             refreshGrid(searchField.getText());
                         })
                 .sizing(Sizing.fixed(FILTER_WIDTH), Sizing.fixed(COMPONENT_HEIGHT));
 
-        var checkbox = Components.checkbox(Text.of("Look at target"));
-        checkbox.margins(Insets.top(BORDER));
+        CheckboxComponent lookAtCheckbox = (CheckboxComponent) Components
+                .checkbox(Text.of("Look at target"))
+                .checked(config.lookAtTarget()).onChanged(config::setLookAtTarget)
+                .margins(Insets.top(BORDER));
 
-        footer.child(dimFilterBtn).child(checkbox);
+        CheckboxComponent showSmallCheckbox = (CheckboxComponent) Components
+                .checkbox(Text.of("Show small containers"))
+                .checked(config.showSmallContainers())
+                .onChanged(v -> {
+                    config.setShowSmallContainers(v);
+                    refreshGrid(searchField.getText());
+                })
+                .margins(Insets.top(BORDER));
+
+
+        footer.child(dimFilterBtn).child(lookAtCheckbox).child(showSmallCheckbox);
 
         // --- ASSEMBLE ---
         mainWindow.child(title).child(searchBar).child(gridWrapper).child(footer);
         rootComponent.child(mainWindow).alignment(HorizontalAlignment.CENTER, VerticalAlignment.CENTER);
 
-        refreshGrid("");
+        refreshGrid(config.searchQuery());
     }
 
     private void refreshGrid(String query) {
@@ -174,7 +194,7 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
         List<IndexedItem> filteredItems = repository.getSearchIndex().stream()
                 .filter(item -> {
                     boolean matchesQuery = query.isEmpty() || item.stack().getName().getString().toLowerCase().contains(query.toLowerCase());
-                    return matchesQuery && (filterManager.getCurrent() == null || filterManager.getCurrent().matches(item));
+                    return matchesQuery && filterManager.matches(item);
                 }).toList();
 
         List<IndexedItem> sortedItems = new ArrayList<>(filteredItems);

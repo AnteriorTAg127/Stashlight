@@ -9,8 +9,13 @@ import java.util.List;
 
 public class DistanceSort implements SortStrategy {
     @Override
+    public SortKey key() {
+        return SortKey.DISTANCE;
+    }
+
+    @Override
     public String getLabel() {
-        return UIStyle.ICON_DIST;
+        return UIStyle.SORT_DIST;
     }
 
     @Override

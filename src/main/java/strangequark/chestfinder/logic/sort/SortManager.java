@@ -1,27 +1,28 @@
 package strangequark.chestfinder.logic.sort;
 
-import java.util.List;
+import java.util.Map;
 
 public class SortManager {
 
-    private static final List<SortStrategy> DEFAULT_STRATEGIES = List.of(
-            new AlphabeticalSort(),
-            new CountSort(),
-            new DistanceSort()
+    private static final Map<SortKey, SortStrategy> STRATEGIES = Map.of(
+            SortKey.ALPHABETICAL, new AlphabeticalSort(),
+            SortKey.COUNT, new CountSort(),
+            SortKey.DISTANCE, new DistanceSort()
     );
 
-    private final List<SortStrategy> strategies;
-    private int currentIndex = 0;
+    private SortKey current;
 
-    public SortManager() {
-        this.strategies = DEFAULT_STRATEGIES;
+    public SortManager(SortKey initial) {
+        this.current = initial;
     }
-    
+
     public void cycle() {
-        currentIndex = (currentIndex + 1) % strategies.size();
+        SortKey[] keys = SortKey.values();
+        int nextIndex = (current.ordinal() + 1) % keys.length;
+        current = keys[nextIndex];
     }
 
     public SortStrategy getCurrent() {
-        return strategies.get(currentIndex);
+        return STRATEGIES.get(current);
     }
 }
