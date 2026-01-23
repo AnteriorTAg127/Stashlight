@@ -2,10 +2,8 @@ package strangequark.chestfinder.render;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
-import net.minecraft.util.math.BlockPos;
 import org.jetbrains.annotations.NotNull;
 import strangequark.chestfinder.model.HighlightPos;
 import strangequark.chestfinder.model.IndexedItem;
@@ -18,7 +16,7 @@ public final class HighlightManager {
     private static final List<HighlightPos> highlights = new ArrayList<>();
 
     private HighlightManager() {
-    } // prevent instantiation
+    }
 
     public static boolean tryHighlight(IndexedItem item) {
         MinecraftClient client = MinecraftClient.getInstance();
@@ -48,19 +46,6 @@ public final class HighlightManager {
             }
         }
         return active;
-    }
-
-    private static void lookAt(PlayerEntity player, BlockPos target) {
-        double d = target.getX() + 0.5 - player.getX();
-        double e = target.getY() + 0.5 - player.getEyeY();
-        double f = target.getZ() + 0.5 - player.getZ();
-        double g = Math.sqrt(d * d + f * f);
-
-        float yaw = (float) (Math.atan2(f, d) * 180.0 / Math.PI) - 90.0f;
-        float pitch = (float) (-(Math.atan2(e, g) * 180.0 / Math.PI));
-
-        player.setYaw(yaw);
-        player.setPitch(pitch);
     }
 
     private static void notifyWrongDimension(@NotNull ClientPlayerEntity player) {

@@ -10,12 +10,13 @@ import org.joml.Matrix4f;
 public final class HighlightGeometry {
 
     private static final float THICKNESS = 0.02f;
+    private static final float MAX_THICKNESS = 0.7f;
     private static final float R = 1f, G = 1f, B = 1f, A = 1f;
 
 
     static void drawWireframeBox(MatrixStack matrices, VertexConsumer vc, Vec3d cam, BlockPos pos) {
         double dist = pos.getSquaredDistance(cam.x, cam.y, cam.z);
-        float t = (float) Math.min(THICKNESS + Math.sqrt(dist) * 0.002, 0.7f);
+        float t = (float) Math.min(THICKNESS + Math.sqrt(dist) * 0.002, MAX_THICKNESS);
 
         float min = -t;
         float max = 1f + t;

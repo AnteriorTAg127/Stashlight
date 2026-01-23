@@ -57,11 +57,7 @@ public class Util {
             }
 
             Direction facing = state.get(ChestBlock.FACING);
-            Direction offset =
-                    type == ChestType.LEFT
-                            ? facing.rotateYClockwise()
-                            : facing.rotateYCounterclockwise();
-
+            Direction offset = type == ChestType.LEFT ? facing.rotateYClockwise() : facing.rotateYCounterclockwise();
             BlockPos other = pos.offset(offset);
 
             if (world.getBlockState(other).getBlock() instanceof ChestBlock) {

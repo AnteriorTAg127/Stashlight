@@ -4,15 +4,10 @@ package strangequark.chestfinder.gui;
 import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.core.OwoUIDrawContext;
 import io.wispforest.owo.ui.core.Sizing;
-import io.wispforest.owo.ui.parsing.UIModel;
-import io.wispforest.owo.ui.parsing.UIParsing;
 import net.minecraft.text.Text;
-import org.w3c.dom.Element;
-
-import java.util.Map;
 
 public class QuantityLabel extends LabelComponent {
-    protected float scale = 1f;
+    private float scale = 1f;
 
     public QuantityLabel(Text text) {
         super(text);
@@ -65,15 +60,5 @@ public class QuantityLabel extends LabelComponent {
     protected int determineVerticalContentSize(Sizing sizing) {
         // Calculate the unscaled size first, then multiply by the scale.
         return (int) (super.determineVerticalContentSize(sizing) * this.scale);
-    }
-
-    // 7. Override parseProperties to enable setting scale in UIs (if using XML/JSON)
-    @Override
-    public void parseProperties(UIModel model, Element element, Map<String, Element> children) {
-        // Call super to parse all the base LabelComponent properties (text, color, etc.)
-        super.parseProperties(model, element, children);
-
-        // Parse the new 'scale' property. We use 'UIParsing::parseFloat' for a floating point number.
-        UIParsing.apply(children, "scale", UIParsing::parseFloat, this::scale);
     }
 }

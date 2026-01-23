@@ -19,11 +19,16 @@ public class Serializer {
     private final Path file;
     private final RegistryWrapper.WrapperLookup lookup;
 
+    private static final String NBT_CONTAINER_NAME_KEY = "name";
+    private static final String NBT_CONTAINER_CAPACITY_KEY = "capacity";
+    private static final String NBT_STACK_LIST_KEY = "items";
+    private static final String NBT_TIMESTAMP_KEY = "time";
+
     public Serializer(Path file, RegistryWrapper.WrapperLookup lookup) {
         this.file = file;
         this.lookup = lookup;
     }
-    
+
     public Map<String, Map<BlockPos, ContainerSnapshot>> read() {
         Map<String, Map<BlockPos, ContainerSnapshot>> database = new HashMap<>();
         if (file == null || !Files.exists(file)) return database;
@@ -36,9 +41,7 @@ public class Serializer {
                     Map<BlockPos, ContainerSnapshot> posMap = new HashMap<>();
                     for (String key : dimTag.getKeys()) {
                         BlockPos pos = BlockPos.fromLong(Long.parseLong(key));
-                        dimTag.getCompound(key).ifPresent(snapNbt ->
-                                posMap.put(pos, deserializeSnapshot(snapNbt))
-                        );
+                        dimTag.getCompound(key).ifPresent(snapNbt -> posMap.put(pos, deserializeSnapshot(snapNbt)));
                     }
                     database.put(dim, posMap);
                 });
@@ -68,27 +71,26 @@ public class Serializer {
 
     private NbtCompound serializeSnapshot(ContainerSnapshot snap) {
         NbtCompound nbt = new NbtCompound();
-        nbt.putString("name", snap.containerName());
-        nbt.putInt("capacity", snap.containerCapacity());
-        nbt.putLong("time", snap.timestamp());
+        nbt.putString(NBT_CONTAINER_NAME_KEY, snap.containerName());
+        nbt.putInt(NBT_CONTAINER_CAPACITY_KEY, snap.containerCapacity());
+        nbt.putLong(NBT_TIMESTAMP_KEY, snap.timestamp());
 
         NbtList itemList = new NbtList();
         for (ItemStack stack : snap.items()) {
             itemList.add(serializeStack(stack));
         }
-        nbt.put("items", itemList);
+        nbt.put(NBT_STACK_LIST_KEY, itemList);
         return nbt;
     }
 
     private ContainerSnapshot deserializeSnapshot(NbtCompound nbt) {
-        String name = nbt.getString("name").orElse("");
-        int capacity = nbt.getInt("capacity").orElse(0);
-        long timestamp = nbt.getLong("time").orElse(0L);
+        String name = nbt.getString(NBT_CONTAINER_NAME_KEY).orElse("");
+        int capacity = nbt.getInt(NBT_CONTAINER_CAPACITY_KEY).orElse(0);
+        long timestamp = nbt.getLong(NBT_TIMESTAMP_KEY).orElse(0L);
 
         List<ItemStack> items = new ArrayList<>();
-        nbt.getList("items").ifPresent(itemList -> {
+        nbt.getList(NBT_STACK_LIST_KEY).ifPresent(itemList -> {
             for (int i = 0; i < itemList.size(); i++) {
-                // Safe access to the compound inside the list
                 itemList.getCompound(i)
                         .map(this::deserializeStack)
                         .ifPresent(items::add);
