@@ -9,6 +9,8 @@ import io.wispforest.owo.ui.container.ScrollContainer;
 import io.wispforest.owo.ui.core.*;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 import org.jetbrains.annotations.NotNull;
 import strangequark.chestfinder.config.Config;
@@ -193,7 +195,7 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
 
         List<IndexedItem> filteredItems = repository.getSearchIndex().stream()
                 .filter(item -> {
-                    boolean matchesQuery = query.isEmpty() || item.stack().getName().getString().toLowerCase().contains(query.toLowerCase());
+                    boolean matchesQuery = matchesDeep(item.stack(), query);
                     return matchesQuery && filterManager.matches(item);
                 }).toList();
 
@@ -209,6 +211,32 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
         }
 
         this.scrollContent.child(grid);
+    }
+
+    public static boolean matchesDeep(ItemStack stack, String query) {
+        if (query.isEmpty()) return true;
+        String q = query.toLowerCase();
+
+        // 1. Check main item name
+        if (stack.getName().getString().toLowerCase().contains(q)) return true;
+
+        // 2. Check Shulker-like containers
+        var container = stack.get(DataComponentTypes.CONTAINER);
+        if (container != null) {
+            for (ItemStack inner : container.iterateNonEmpty()) {
+                if (inner.getName().getString().toLowerCase().contains(q)) return true;
+            }
+        }
+
+        // 3. Check Bundles
+        var bundle = stack.get(DataComponentTypes.BUNDLE_CONTENTS);
+        if (bundle != null) {
+            for (ItemStack inner : bundle.iterate()) {
+                if (inner.getName().getString().toLowerCase().contains(q)) return true;
+            }
+        }
+
+        return false;
     }
 
     @Override

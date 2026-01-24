@@ -100,13 +100,27 @@ public class Serializer {
     }
 
     private NbtElement serializeStack(ItemStack stack) {
-        var ops = RegistryOps.of(NbtOps.INSTANCE, lookup);
-        return ItemStack.CODEC.encodeStart(ops, stack).getOrThrow();
+        try {
+            var ops = RegistryOps.of(NbtOps.INSTANCE, lookup);
+            return ItemStack.CODEC.encodeStart(ops, stack)
+                    .resultOrPartial(error -> ChestFinder.LOGGER.warn("Failed to serialize item: {}", error))
+                    .orElse(new NbtCompound());
+        } catch (Exception e) {
+            ChestFinder.LOGGER.warn("ItemStack serialization failed for {}", stack.getItem(), e);
+            return new NbtCompound();
+        }
     }
 
     private ItemStack deserializeStack(NbtCompound nbt) {
-        var ops = RegistryOps.of(NbtOps.INSTANCE, lookup);
-        return ItemStack.CODEC.parse(ops, nbt).getOrThrow();
+        try {
+            var ops = RegistryOps.of(NbtOps.INSTANCE, lookup);
+            return ItemStack.CODEC.parse(ops, nbt)
+                    .resultOrPartial(error -> ChestFinder.LOGGER.warn("Failed to deserialize item: {}", error))
+                    .orElse(ItemStack.EMPTY);
+        } catch (Exception e) {
+            ChestFinder.LOGGER.warn("ItemStack deserialization failed", e);
+            return ItemStack.EMPTY;
+        }
     }
 
 }
