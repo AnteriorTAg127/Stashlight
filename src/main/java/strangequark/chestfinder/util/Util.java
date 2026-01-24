@@ -15,17 +15,13 @@ public class Util {
         return world.getRegistryKey().getValue().getPath();
     }
 
-    /**
-     * Determines if a block should be tracked by the mod.
-     * Use this in both serializeContainer (saving) and runCleanup (deleting).
-     */
     public static boolean isValidSearchableContainer(BlockState state) {
         Block block = state.getBlock();
 
         if (!(block instanceof BlockWithEntity)) {
             return false;
         }
-        
+
         return !(block instanceof EnderChestBlock || block instanceof EnchantingTableBlock || block instanceof BeaconBlock);
     }
 

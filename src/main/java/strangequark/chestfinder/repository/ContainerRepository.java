@@ -10,14 +10,25 @@ import strangequark.chestfinder.serializer.Serializer;
 import strangequark.chestfinder.util.Util;
 
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class ContainerRepository {
 
     private final Serializer serializer;
-    private boolean isDirty = false;
+    private volatile boolean isDirty = false;
 
     private final Map<String, Map<BlockPos, ContainerSnapshot>> CONTAINER_ENTRIES_MAP;
-    private final List<IndexedItem> SEARCH_INDEX = new ArrayList<>();
+    private List<IndexedItem> SEARCH_INDEX = new ArrayList<>();
+
+    private final Map<String, Map<BlockPos, List<IndexedItem>>> INDEX_LOOKUP = new HashMap<>();
+
+
+    private final ExecutorService cleanupExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "ChestFinder-Cleanup");
+        t.setDaemon(true);
+        return t;
+    });
 
     public ContainerRepository(Serializer serializer) {
         this.serializer = serializer;
@@ -31,35 +42,40 @@ public class ContainerRepository {
 
         if (dataMap == null || dataMap.isEmpty()) return;
 
-        new Thread(() -> {
-            boolean changed = false;
-
+        cleanupExecutor.submit(() -> {
+            // Step 1: Collect positions to check (quick, inside lock)
+            List<BlockPos> toCheck;
             synchronized (CONTAINER_ENTRIES_MAP) {
-                Iterator<Map.Entry<BlockPos, ContainerSnapshot>> iterator = dataMap.entrySet().iterator();
+                toCheck = new ArrayList<>(dataMap.keySet());
+            }
 
-                while (iterator.hasNext()) {
-                    Map.Entry<BlockPos, ContainerSnapshot> entry = iterator.next();
-                    BlockPos pos = entry.getKey();
-
+            // Step 2: Check world state (slow, OUTSIDE lock - doesn't block other operations)
+            List<BlockPos> toRemove = new ArrayList<>();
+            for (BlockPos pos : toCheck) {
+                try {
                     if (world.getChunkManager().isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4)) {
                         var state = world.getBlockState(pos);
                         if (!Util.isValidSearchableContainer(state)) {
-                            iterator.remove();
-                            changed = true;
+                            toRemove.add(pos);
                         }
                     }
-                }
-
-                if (changed) {
-                    this.isDirty = true;
-                    rebuildIndex();
+                } catch (Exception e) {
+                    // Skip this position if world access fails
                 }
             }
 
-            if (changed) {
+
+            if (!toRemove.isEmpty()) {
+                synchronized (CONTAINER_ENTRIES_MAP) {
+                    for (BlockPos pos : toRemove) {
+                        dataMap.remove(pos);
+                        removeFromIndex(dimension, pos);
+                    }
+                    this.isDirty = true;
+                }
                 saveIfDirty();
             }
-        }, "ChestFinder-Cleanup").start();
+        });
     }
 
     public void update(String dimension, BlockPos pos, String blockName, int capacity, List<ItemStack> stacks) {
@@ -75,7 +91,9 @@ public class ContainerRepository {
         synchronized (CONTAINER_ENTRIES_MAP) {
             CONTAINER_ENTRIES_MAP.computeIfAbsent(dimension, k -> new HashMap<>()).put(pos, snapshot);
             this.isDirty = true;
-            rebuildIndex();
+
+            removeFromIndex(dimension, pos);
+            addToIndex(dimension, pos, snapshot);
         }
     }
 
@@ -84,9 +102,58 @@ public class ContainerRepository {
             Map<BlockPos, ContainerSnapshot> dimMap = CONTAINER_ENTRIES_MAP.get(dimension);
             if (dimMap != null && dimMap.remove(pos) != null) {
                 this.isDirty = true;
-                rebuildIndex();
+                removeFromIndex(dimension, pos);
             }
         }
+    }
+
+    private void removeFromIndex(String dimension, BlockPos pos) {
+        Map<BlockPos, List<IndexedItem>> dimLookup = INDEX_LOOKUP.get(dimension);
+        if (dimLookup != null) {
+            List<IndexedItem> oldItems = dimLookup.remove(pos);
+
+            if (oldItems != null && !oldItems.isEmpty()) {
+                Set<IndexedItem> itemsToRemove = new HashSet<>(oldItems);
+
+                // Build new list in O(N) time
+                List<IndexedItem> newIndex = new ArrayList<>(SEARCH_INDEX.size());
+                for (IndexedItem item : SEARCH_INDEX) {
+                    if (!itemsToRemove.contains(item)) {
+                        newIndex.add(item);
+                    }
+                }
+                SEARCH_INDEX = newIndex;
+            }
+        }
+    }
+
+    private void addToIndex(String dimension, BlockPos pos, ContainerSnapshot snapshot) {
+        Map<StackKey, ItemStack> localMap = new LinkedHashMap<>();
+        for (ItemStack stack : snapshot.items()) {
+            if (stack == null || stack.isEmpty()) continue;
+            StackKey key = new StackKey(stack);
+            if (localMap.containsKey(key)) {
+                localMap.get(key).increment(stack.getCount());
+            } else {
+                localMap.put(key, stack.copy());
+            }
+        }
+
+        List<IndexedItem> newItems = new ArrayList<>();
+        for (ItemStack summedStack : localMap.values()) {
+            IndexedItem indexedItem = new IndexedItem(
+                    summedStack,
+                    pos,
+                    dimension,
+                    snapshot.containerName(),
+                    snapshot.containerCapacity(),
+                    snapshot.timestamp()
+            );
+            newItems.add(indexedItem);
+            SEARCH_INDEX.add(indexedItem);
+        }
+
+        INDEX_LOOKUP.computeIfAbsent(dimension, k -> new HashMap<>()).put(pos, newItems);
     }
 
     public void saveIfDirty() {
@@ -100,35 +167,15 @@ public class ContainerRepository {
 
     public void rebuildIndex() {
         synchronized (CONTAINER_ENTRIES_MAP) {
-            SEARCH_INDEX.clear();
+            SEARCH_INDEX = new ArrayList<>();
+            INDEX_LOOKUP.clear();
 
             for (var dimEntry : CONTAINER_ENTRIES_MAP.entrySet()) {
                 String dimension = dimEntry.getKey();
                 for (var posEntry : dimEntry.getValue().entrySet()) {
                     BlockPos pos = posEntry.getKey();
                     ContainerSnapshot snapshot = posEntry.getValue();
-
-                    Map<StackKey, ItemStack> localMap = new LinkedHashMap<>();
-                    for (ItemStack stack : snapshot.items()) {
-                        if (stack == null || stack.isEmpty()) continue;
-                        StackKey key = new StackKey(stack);
-                        if (localMap.containsKey(key)) {
-                            localMap.get(key).increment(stack.getCount());
-                        } else {
-                            localMap.put(key, stack.copy());
-                        }
-                    }
-
-                    for (ItemStack summedStack : localMap.values()) {
-                        SEARCH_INDEX.add(new IndexedItem(
-                                summedStack,
-                                pos,
-                                dimension,
-                                snapshot.containerName(),
-                                snapshot.containerCapacity(),
-                                snapshot.timestamp()
-                        ));
-                    }
+                    addToIndex(dimension, pos, snapshot);
                 }
             }
         }
@@ -138,12 +185,14 @@ public class ContainerRepository {
         return CONTAINER_ENTRIES_MAP;
     }
 
-    /**
-     * Now Thread-Safe for the SearchScreen to use!
-     */
     public List<IndexedItem> getSearchIndex() {
         synchronized (CONTAINER_ENTRIES_MAP) {
             return new ArrayList<>(SEARCH_INDEX);
         }
+    }
+
+    public void shutdown() {
+        this.saveIfDirty();
+        cleanupExecutor.shutdown();
     }
 }

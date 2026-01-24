@@ -95,7 +95,8 @@ public class ChestFinder implements ClientModInitializer {
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             if (repository != null) {
-                repository.saveIfDirty();
+                repository.shutdown();
+
             }
             serializer = null;
             repository = null;
