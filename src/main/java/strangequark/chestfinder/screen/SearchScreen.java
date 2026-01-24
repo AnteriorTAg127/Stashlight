@@ -55,7 +55,7 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
 
         strategies.add(new DimensionFilter("All", null));
 
-        repository.getContainerEntriesMap().keySet().forEach(dim -> strategies.add(new DimensionFilter(dim, dim)));
+        repository.getDimensions().forEach(dim -> strategies.add(new DimensionFilter(dim, dim)));
 
         filterManager.setCyclingStrategies(strategies);
         filterManager.addAlwaysOn(new SmallContainerFilter());

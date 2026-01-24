@@ -180,9 +180,11 @@ public class ContainerRepository {
             }
         }
     }
-
-    public Map<String, Map<BlockPos, ContainerSnapshot>> getContainerEntriesMap() {
-        return CONTAINER_ENTRIES_MAP;
+    
+    public Set<String> getDimensions() {
+        synchronized (CONTAINER_ENTRIES_MAP) {
+            return new HashSet<>(CONTAINER_ENTRIES_MAP.keySet());
+        }
     }
 
     public List<IndexedItem> getSearchIndex() {
