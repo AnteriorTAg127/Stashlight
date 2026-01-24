@@ -17,7 +17,7 @@
   "environment": "client",
   "entrypoints": {
     "client": [
-      "strangequark.containerlookup.ContainerLookup"
+      "dev.strangequark.containerlookup.ContainerLookup"
     ]
   },
   "mixins": [],
