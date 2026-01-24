@@ -1,34 +1,32 @@
-# Container Lookup
+# StashLight
 
-Client-side Fabric mod that records container contents and enables fast, global item search across your world.
+**Find your forgotten items.**
 
-## Overview
-
-Container Lookup passively indexes containers as you open them and stores their contents locally. You can then search for any item and instantly locate the containers that hold it, even across dimensions.
+StashLight is a lightweight, client-side Fabric mod that passively indexes every container you open, letting you instantly search for items across your world — even inside Shulker Boxes, Bundles, nested inventories, and across dimensions.
 
 ## Features
 
-- **World-wide item search**  
+- **World-wide instant search**  
   Locate items in any indexed container
 
 - **Nested container indexing**  
   Caches nested inventories, enabling searches inside shulker boxes and bundles
 
-- **Supported containers**  
-  Chests, barrels, shulker boxes, hoppers, droppers, and other block entities with inventories\*
+- **Broad container support**  
+  Works with Chests, Barrels, Shulkers, Hoppers, Droppers, Dispensers, and most modded block entities with inventories*
 
 - **In-world location highlighting**  
-  Highlights a container’s position when an item is selected
+  Clicking a search result highlights the container in the world for easy navigation
 
 - **Cross-dimension tracking**  
-  Tracks containers across Overworld, Nether, End, and modded dimensions\*
+  Tracks containers across Overworld, Nether, End, and modded dimensions*
 
 - **Client-side only**  
-  Works on any server. No server mods required
+  Fully functional without server-side mods or plugins
 
 <br/>
 
-\* _Modded containers and dimensions are untested but expected to work_
+<sub>* _Modded containers and dimensions are untested but expected to work_</sub>
 
 ## Requirements
 

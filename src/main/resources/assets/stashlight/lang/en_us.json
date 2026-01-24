@@ -1,0 +1,10 @@
+{
+  "key.category.stashlight.stashlight": "Container Lookup",
+  "key.stashlight.search_menu": "Search Menu",
+  "gui.stashlight.label.dimension": "Dimension",
+  "gui.stashlight.label.container": "Container",
+  "gui.stashlight.label.location": "Location",
+  "gui.stashlight.label.blocksAway": " (%s blocks away)",
+  "screen.stashlight.lookAtTarget": "Look at target",
+  "screen.stashlight.showSmallContainers": "Show small containers"
+}

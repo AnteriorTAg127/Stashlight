@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "id": "containerlookup",
+  "id": "stashlight",
   "version": "${version}",
-  "name": "Container Lookup",
+  "name": "Stashlight",
   "description": "Caches chest contents and lets you search through them via an in-game menu.",
   "authors": [
     "Strange Quark"
@@ -13,11 +13,11 @@
     "issues": "https://github.com/StrangeQuark/Container-Lookup/issues"
   },
   "license": "GPL-3.0-only",
-  "icon": "assets/containerlookup/icon.png",
+  "icon": "assets/stashlight/icon.png",
   "environment": "client",
   "entrypoints": {
     "client": [
-      "dev.strangequark.containerlookup.ContainerLookup"
+      "dev.strangequark.stashlight.Stashlight"
     ]
   },
   "mixins": [],
