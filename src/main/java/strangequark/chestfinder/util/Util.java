@@ -1,8 +1,6 @@
 package strangequark.chestfinder.util;
 
-import net.minecraft.block.BlockState;
-import net.minecraft.block.BlockWithEntity;
-import net.minecraft.block.ChestBlock;
+import net.minecraft.block.*;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.enums.ChestType;
 import net.minecraft.inventory.DoubleInventory;
@@ -15,6 +13,20 @@ import java.util.Set;
 public class Util {
     public static String getDimensionName(World world) {
         return world.getRegistryKey().getValue().getPath();
+    }
+
+    /**
+     * Determines if a block should be tracked by the mod.
+     * Use this in both serializeContainer (saving) and runCleanup (deleting).
+     */
+    public static boolean isValidSearchableContainer(BlockState state) {
+        Block block = state.getBlock();
+
+        if (!(block instanceof BlockWithEntity)) {
+            return false;
+        }
+        
+        return !(block instanceof EnderChestBlock || block instanceof EnchantingTableBlock || block instanceof BeaconBlock);
     }
 
     public static BlockPos getCanonicalPos(World world, BlockPos pos) {

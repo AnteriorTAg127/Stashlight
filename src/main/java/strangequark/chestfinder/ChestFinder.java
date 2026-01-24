@@ -6,16 +6,18 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
-import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
+import net.fabricmc.fabric.api.event.client.player.ClientPlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
-import net.minecraft.block.*;
-import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.BlockWithEntity;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
+import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.util.ActionResult;
@@ -45,6 +47,8 @@ public class ChestFinder implements ClientModInitializer {
     private static KeyBinding searchKey;
     public static final KeyBinding.Category CHEST_FINDER = KeyBinding.Category.create(Identifier.of(MOD_ID, "chestfinder"));
 
+    private int tickCounter = 0;
+
     @Nullable
     private BlockPos lastOpened;
 
@@ -52,8 +56,7 @@ public class ChestFinder implements ClientModInitializer {
     public void onInitializeClient() {
         Init.init();
         UseBlockCallback.EVENT.register(this::onBlockUsed);
-        // BEFORE is critical: we must resolve the chest's identity while it still exists in the world.
-        PlayerBlockBreakEvents.BEFORE.register(this::onBlockBreak);
+        ClientPlayerBlockBreakEvents.AFTER.register(this::onBlockBreak);
         ScreenEvents.AFTER_INIT.register(this::onScreenInit);
         WorldRenderEvents.AFTER_ENTITIES.register(HighlightRenderer::render);
 
@@ -70,14 +73,29 @@ public class ChestFinder implements ClientModInitializer {
             }
         });
 
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (client.world == null || repository == null) return;
+
+            tickCounter++;
+
+            if (tickCounter % 100 == 0) {
+                repository.runCleanup(client.world);
+            }
+
+            if (tickCounter % 3000 == 0) {
+                repository.saveIfDirty();
+                tickCounter = 0;
+            }
+        });
+
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             serializer = new Serializer(Init.getFileName(), handler.getRegistryManager());
             repository = new ContainerRepository(serializer);
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
-            if (repository != null && serializer != null) {
-                serializer.write(repository.getContainerEntriesMap());
+            if (repository != null) {
+                repository.saveIfDirty();
             }
             serializer = null;
             repository = null;
@@ -87,23 +105,21 @@ public class ChestFinder implements ClientModInitializer {
     private ActionResult onBlockUsed(PlayerEntity playerEntity, World world, Hand hand, BlockHitResult blockHitResult) {
         BlockPos pos = blockHitResult.getBlockPos();
         BlockState state = world.getBlockState(pos);
-        if (state.getBlock() instanceof BlockWithEntity) {
+        if (Util.isValidSearchableContainer(state)) {
             lastOpened = pos;
         }
         return ActionResult.PASS;
     }
 
-    @SuppressWarnings("SameReturnValue")
-    private boolean onBlockBreak(World world, PlayerEntity playerEntity, BlockPos blockPos, BlockState blockState, @Nullable BlockEntity blockEntity) {
+    private void onBlockBreak(ClientWorld clientWorld, ClientPlayerEntity clientPlayerEntity, BlockPos blockPos, BlockState blockState) {
         if (repository == null || !(blockState.getBlock() instanceof BlockWithEntity)) {
-            return true;
+            return;
         }
 
         // Use the canonical resolution to find the correct database key to delete.
-        BlockPos canonicalPos = Util.getCanonicalPos(world, blockPos);
-        String dimension = Util.getDimensionName(world);
+        BlockPos canonicalPos = Util.getCanonicalPos(clientWorld, blockPos);
+        String dimension = Util.getDimensionName(clientWorld);
         repository.remove(dimension, canonicalPos);
-        return true;
     }
 
 
@@ -127,9 +143,10 @@ public class ChestFinder implements ClientModInitializer {
         String dimension = Util.getDimensionName(client.world);
         Set<BlockPos> pair = Util.resolveContainerPositions(client.world, lastOpened);
         BlockPos canonicalPos = Util.getCanonicalPos(client.world, pair.iterator().next());
-        Block block = client.world.getBlockState(canonicalPos).getBlock();
+        BlockState blockstate = client.world.getBlockState(canonicalPos);
 
-        if (!(block instanceof BlockWithEntity) || block instanceof EnderChestBlock || block instanceof EnchantingTableBlock || block instanceof BeaconBlock) {
+
+        if (!Util.isValidSearchableContainer(blockstate)) {
             lastOpened = null;
             return;
         }
@@ -141,7 +158,7 @@ public class ChestFinder implements ClientModInitializer {
             return;
         }
 
-        // HARD INVALIDATION — nuke everything
+        // HARD INVALIDATION — nuke positions data
         repository.remove(dimension, canonicalPos);
         for (BlockPos p : pair) {
             repository.remove(dimension, p);
@@ -151,7 +168,7 @@ public class ChestFinder implements ClientModInitializer {
         repository.update(
                 dimension,
                 canonicalPos,
-                block.getName().getString(),
+                blockstate.getBlock().getName().getString(),
                 containerSize,
                 stacks.subList(0, containerSize)
         );

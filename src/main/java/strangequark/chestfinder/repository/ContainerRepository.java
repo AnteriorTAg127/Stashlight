@@ -1,33 +1,67 @@
 package strangequark.chestfinder.repository;
 
+import net.minecraft.client.world.ClientWorld;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.math.BlockPos;
 import strangequark.chestfinder.model.ContainerSnapshot;
 import strangequark.chestfinder.model.IndexedItem;
 import strangequark.chestfinder.model.StackKey;
 import strangequark.chestfinder.serializer.Serializer;
+import strangequark.chestfinder.util.Util;
 
 import java.util.*;
 
 public class ContainerRepository {
 
     private final Serializer serializer;
+    private boolean isDirty = false;
 
-    // The Source of Truth (For NBT Serialization)
     private final Map<String, Map<BlockPos, ContainerSnapshot>> CONTAINER_ENTRIES_MAP;
-
-    // The Flattened UI Index (Pre-computed for search performance)
     private final List<IndexedItem> SEARCH_INDEX = new ArrayList<>();
 
     public ContainerRepository(Serializer serializer) {
         this.serializer = serializer;
-        CONTAINER_ENTRIES_MAP = serializer.read();
+        this.CONTAINER_ENTRIES_MAP = serializer.read();
         rebuildIndex();
     }
 
-    /**
-     * Updates a container and triggers an index rebuild.
-     */
+    public void runCleanup(ClientWorld world) {
+        String dimension = Util.getDimensionName(world);
+        Map<BlockPos, ContainerSnapshot> dataMap = CONTAINER_ENTRIES_MAP.get(dimension);
+
+        if (dataMap == null || dataMap.isEmpty()) return;
+
+        new Thread(() -> {
+            boolean changed = false;
+
+            synchronized (CONTAINER_ENTRIES_MAP) {
+                Iterator<Map.Entry<BlockPos, ContainerSnapshot>> iterator = dataMap.entrySet().iterator();
+
+                while (iterator.hasNext()) {
+                    Map.Entry<BlockPos, ContainerSnapshot> entry = iterator.next();
+                    BlockPos pos = entry.getKey();
+
+                    if (world.getChunkManager().isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4)) {
+                        var state = world.getBlockState(pos);
+                        if (!Util.isValidSearchableContainer(state)) {
+                            iterator.remove();
+                            changed = true;
+                        }
+                    }
+                }
+
+                if (changed) {
+                    this.isDirty = true;
+                    rebuildIndex();
+                }
+            }
+
+            if (changed) {
+                saveIfDirty();
+            }
+        }, "ChestFinder-Cleanup").start();
+    }
+
     public void update(String dimension, BlockPos pos, String blockName, int capacity, List<ItemStack> stacks) {
         List<ItemStack> copiedStacks = new ArrayList<>();
         for (ItemStack original : stacks) {
@@ -37,70 +71,79 @@ public class ContainerRepository {
         }
 
         ContainerSnapshot snapshot = new ContainerSnapshot(blockName, capacity, copiedStacks, System.currentTimeMillis());
-        CONTAINER_ENTRIES_MAP.computeIfAbsent(dimension, k -> new HashMap<>()).put(pos, snapshot);
 
-        serializer.write(CONTAINER_ENTRIES_MAP);
-        rebuildIndex();
-    }
-
-    public void remove(String dimension, BlockPos pos) {
-        if (CONTAINER_ENTRIES_MAP.containsKey(dimension)) {
-            CONTAINER_ENTRIES_MAP.get(dimension).remove(pos);
-            serializer.write(CONTAINER_ENTRIES_MAP);
+        synchronized (CONTAINER_ENTRIES_MAP) {
+            CONTAINER_ENTRIES_MAP.computeIfAbsent(dimension, k -> new HashMap<>()).put(pos, snapshot);
+            this.isDirty = true;
             rebuildIndex();
         }
     }
 
-    /**
-     * Turns the nested DATABASE into a flat SEARCH_INDEX.
-     * This moves the O(N) computation out of the UI render loop.
-     */
+    public void remove(String dimension, BlockPos pos) {
+        synchronized (CONTAINER_ENTRIES_MAP) {
+            Map<BlockPos, ContainerSnapshot> dimMap = CONTAINER_ENTRIES_MAP.get(dimension);
+            if (dimMap != null && dimMap.remove(pos) != null) {
+                this.isDirty = true;
+                rebuildIndex();
+            }
+        }
+    }
+
+    public void saveIfDirty() {
+        if (this.isDirty) {
+            synchronized (CONTAINER_ENTRIES_MAP) {
+                serializer.write(CONTAINER_ENTRIES_MAP);
+                this.isDirty = false;
+            }
+        }
+    }
+
     public void rebuildIndex() {
-        SEARCH_INDEX.clear();
+        synchronized (CONTAINER_ENTRIES_MAP) {
+            SEARCH_INDEX.clear();
 
-        for (var dimEntry : CONTAINER_ENTRIES_MAP.entrySet()) {
-            String dimension = dimEntry.getKey();
+            for (var dimEntry : CONTAINER_ENTRIES_MAP.entrySet()) {
+                String dimension = dimEntry.getKey();
+                for (var posEntry : dimEntry.getValue().entrySet()) {
+                    BlockPos pos = posEntry.getKey();
+                    ContainerSnapshot snapshot = posEntry.getValue();
 
-            for (var posEntry : dimEntry.getValue().entrySet()) {
-                BlockPos pos = posEntry.getKey();
-                ContainerSnapshot snapshot = posEntry.getValue();
-
-                // Group items within this specific container
-                Map<StackKey, ItemStack> localMap = new LinkedHashMap<>();
-
-                for (ItemStack stack : snapshot.items()) {
-                    if (stack == null || stack.isEmpty()) continue;
-
-                    StackKey key = new StackKey(stack);
-                    if (localMap.containsKey(key)) {
-                        localMap.get(key).increment(stack.getCount());
-                    } else {
-                        localMap.put(key, stack.copy());
+                    Map<StackKey, ItemStack> localMap = new LinkedHashMap<>();
+                    for (ItemStack stack : snapshot.items()) {
+                        if (stack == null || stack.isEmpty()) continue;
+                        StackKey key = new StackKey(stack);
+                        if (localMap.containsKey(key)) {
+                            localMap.get(key).increment(stack.getCount());
+                        } else {
+                            localMap.put(key, stack.copy());
+                        }
                     }
-                }
 
-                // Convert grouped ItemStacks into IndexedItem discoveries
-                for (ItemStack summedStack : localMap.values()) {
-                    SEARCH_INDEX.add(new IndexedItem(
-                            summedStack,
-                            pos,
-                            dimension,
-                            snapshot.containerName(),
-                            snapshot.containerCapacity(),
-                            snapshot.timestamp()
-                    ));
+                    for (ItemStack summedStack : localMap.values()) {
+                        SEARCH_INDEX.add(new IndexedItem(
+                                summedStack,
+                                pos,
+                                dimension,
+                                snapshot.containerName(),
+                                snapshot.containerCapacity(),
+                                snapshot.timestamp()
+                        ));
+                    }
                 }
             }
         }
     }
 
-    public List<IndexedItem> getSearchIndex() {
-        return SEARCH_INDEX;
-    }
-
-
     public Map<String, Map<BlockPos, ContainerSnapshot>> getContainerEntriesMap() {
         return CONTAINER_ENTRIES_MAP;
     }
 
+    /**
+     * Now Thread-Safe for the SearchScreen to use!
+     */
+    public List<IndexedItem> getSearchIndex() {
+        synchronized (CONTAINER_ENTRIES_MAP) {
+            return new ArrayList<>(SEARCH_INDEX);
+        }
+    }
 }
