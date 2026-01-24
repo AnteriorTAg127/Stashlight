@@ -8,8 +8,11 @@
     "Strange Quark"
   ],
   "contact": {
+    "homepage": "https://github.com/StrangeQuark/Container-Lookup",
+    "sources": "https://github.com/StrangeQuark/Container-Lookup",
+    "issues": "https://github.com/StrangeQuark/Container-Lookup/issues"
   },
-  "license": "ARR",
+  "license": "GPL-3.0-only",
   "icon": "assets/containerlookup/icon.png",
   "environment": "client",
   "entrypoints": {
