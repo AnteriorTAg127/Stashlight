@@ -61,7 +61,7 @@ public class ContainerLookup implements ClientModInitializer {
         WorldRenderEvents.AFTER_ENTITIES.register(HighlightRenderer::render);
 
         searchKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-                "Search",
+                "key.containerlookup.search_menu",
                 InputUtil.Type.KEYSYM,
                 GLFW.GLFW_KEY_KP_5,
                 CONTAINER_LOOKUP

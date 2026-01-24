@@ -70,7 +70,13 @@ public class ItemSlot extends StackLayout {
     @Override
     public void drawTooltip(OwoUIDrawContext context, int mouseX, int mouseY, float partialTicks, float delta) {
         var client = MinecraftClient.getInstance();
-        if (client.player == null || client.world == null) return;
+        if (client.player == null || client.world == null) {
+            return;
+        }
+
+        double dist = Math.sqrt(client.player.getBlockPos().getSquaredDistance(indexedItem.pos()));
+        String formattedDist = String.format("%.1f", dist);
+        String posStr = String.format("%d, %d, %d", indexedItem.pos().getX(), indexedItem.pos().getY(), indexedItem.pos().getZ());
 
         // 1. Get Vanilla Lines (Handles Item Name & Data Components)
         List<Text> lines = new ArrayList<>(this.indexedItem.stack().getTooltip(
@@ -81,21 +87,19 @@ public class ItemSlot extends StackLayout {
 
         lines.add(Text.empty()); // Spacer
 
-        // Container
-        lines.add(Text.literal("Container: ").formatted(Formatting.GRAY)
+// Container
+        lines.add(Text.translatable("gui.containerlookup.label.container").formatted(Formatting.GRAY).append(": ")
                 .append(Text.translatable(indexedItem.containerName()).formatted(Formatting.WHITE)));
 
-        // Location
-        double dist = Math.sqrt(client.player.getBlockPos().getSquaredDistance(indexedItem.pos()));
-        String posStr = String.format("%d, %d, %d", indexedItem.pos().getX(), indexedItem.pos().getY(), indexedItem.pos().getZ());
-
-        lines.add(Text.literal("Location: ").formatted(Formatting.GRAY)
+// Location
+        lines.add(Text.translatable("gui.containerlookup.label.location").formatted(Formatting.GRAY)
+                .append(Text.literal(": ").formatted(Formatting.GRAY))
                 .append(Text.literal(posStr).formatted(Formatting.AQUA))
-                .append(Text.literal(String.format(" (%.1f blocks away)", dist)).formatted(Formatting.YELLOW)));
+                .append(Text.translatable("gui.containerlookup.label.blocksAway", formattedDist).formatted(Formatting.GRAY)));
 
-        // Dimension
-        lines.add(Text.literal("Dimension: ").formatted(Formatting.GRAY)
-                .append(Text.literal(indexedItem.dimension()).formatted(Formatting.LIGHT_PURPLE)));
+// Dimension
+        lines.add(Text.translatable("gui.containerlookup.label.dimension").formatted(Formatting.GRAY).append(": ")
+                .append(Text.literal(indexedItem.dimension()).formatted(Formatting.GREEN)));
 
         // Call the vanilla internal method
         context.drawTooltip(

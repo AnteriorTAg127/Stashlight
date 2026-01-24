@@ -151,21 +151,21 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
                 .verticalAlignment(VerticalAlignment.CENTER);
 
         ButtonComponent dimFilterBtn = (ButtonComponent) Components.button(
-                        Text.of("Dimension: " + filterManager.getCurrentLabel()),
+                        Text.translatable("gui.containerlookup.label.dimension").append(": ").append(filterManager.getCurrentLabel()),
                         b -> {
                             filterManager.cycle();
-                            b.setMessage(Text.of("Dimension: " + filterManager.getCurrentLabel()));
+                            b.setMessage(Text.translatable("gui.containerlookup.label.dimension").append(": ").append(filterManager.getCurrentLabel()));
                             refreshGrid(searchField.getText());
                         })
                 .sizing(Sizing.fixed(FILTER_WIDTH), Sizing.fixed(COMPONENT_HEIGHT));
 
         CheckboxComponent lookAtCheckbox = (CheckboxComponent) Components
-                .checkbox(Text.of("Look at target"))
+                .checkbox(Text.translatable("screen.containerlookup.lookAtTarget"))
                 .checked(config.lookAtTarget()).onChanged(config::setLookAtTarget)
                 .margins(Insets.top(BORDER));
 
         CheckboxComponent showSmallCheckbox = (CheckboxComponent) Components
-                .checkbox(Text.of("Show small containers"))
+                .checkbox(Text.translatable("screen.containerlookup.showSmallContainers"))
                 .checked(config.showSmallContainers())
                 .onChanged(v -> {
                     config.setShowSmallContainers(v);

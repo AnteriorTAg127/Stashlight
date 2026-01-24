@@ -18,7 +18,7 @@ public class DimensionFilter implements FilterStrategy {
 
     @Override
     public boolean matches(IndexedItem item) {
-        if (dimension == null) return true; // "All"
+        if (dimension == null) return true;
         return item.dimension().equals(this.dimension);
     }
 }
