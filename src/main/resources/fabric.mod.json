@@ -1,22 +1,20 @@
 {
   "schemaVersion": 1,
-  "id": "chestfinder",
+  "id": "containerlookup",
   "version": "${version}",
-  "name": "Chest Finder",
+  "name": "Container Lookup",
   "description": "Caches chest contents and lets you search through them via an in-game menu.",
   "authors": [
     "Strange Quark"
   ],
   "contact": {
-    "homepage": "https://fabricmc.net/",
-    "sources": "https://github.com/FabricMC/fabric-example-mod"
   },
   "license": "ARR",
-  "icon": "assets/chestfinder/icon.png",
+  "icon": "assets/containerlookup/icon.png",
   "environment": "client",
   "entrypoints": {
     "client": [
-      "strangequark.chestfinder.ChestFinder"
+      "strangequark.containerlookup.ContainerLookup"
     ]
   },
   "mixins": [],
@@ -26,8 +24,5 @@
     "java": ">=21",
     "fabric-api": "*",
     "owo": ">=0.12.0"
-  },
-  "suggests": {
-    "another-mod": "*"
   }
 }
