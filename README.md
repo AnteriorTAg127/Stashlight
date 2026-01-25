@@ -12,6 +12,9 @@ StashLight is a lightweight, client-side Fabric mod that passively indexes every
 - **Nested container indexing**  
   Caches nested inventories, enabling searches inside shulker boxes and bundles
 
+- **ShulkerBoxTooltip support**  
+  Compatible with ShulkerBoxTooltip mod for enhanced item previews in search results
+
 - **Broad container support**  
   Works with Chests, Barrels, Shulkers, Hoppers, Droppers, Dispensers, and most modded block entities with inventories*
 
@@ -27,6 +30,10 @@ StashLight is a lightweight, client-side Fabric mod that passively indexes every
 <br/>
 
 <sub>* _Modded containers and dimensions are untested but expected to work_</sub>
+
+## Usage
+
+Press **NUMPAD 5** to open the search menu (keybind can be changed in Minecraft's controls settings).
 
 ## Requirements
 
