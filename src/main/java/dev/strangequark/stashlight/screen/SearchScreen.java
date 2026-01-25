@@ -93,7 +93,7 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
                 .padding(Insets.of(PADDING));
 
         // --- 2. HEADER & SEARCH BAR ---
-        LabelComponent title = Components.label(Text.of("Search Containers")).shadow(true);
+        LabelComponent title = Components.label(Text.translatable("screen.stashlight.label.searchContainers")).shadow(true);
 
         FlowLayout searchBar = (FlowLayout) Containers
                 .horizontalFlow(Sizing.fill(), Sizing.fixed(COMPONENT_HEIGHT))

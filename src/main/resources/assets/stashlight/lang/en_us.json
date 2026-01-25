@@ -5,6 +5,7 @@
   "gui.stashlight.label.container": "Container",
   "gui.stashlight.label.location": "Location",
   "gui.stashlight.label.blocksAway": " (%s blocks away)",
+  "screen.stashlight.label.searchContainers": "Search Containers",
   "screen.stashlight.lookAtTarget": "Look at target",
   "screen.stashlight.showSmallContainers": "Show small containers"
 }
