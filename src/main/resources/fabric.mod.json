@@ -12,7 +12,7 @@
     "sources": "https://github.com/StrangeQuark/Container-Lookup",
     "issues": "https://github.com/StrangeQuark/Container-Lookup/issues"
   },
-  "license": "GPL-3.0-only",
+  "license": "GPL-3.0-or-later",
   "icon": "assets/stashlight/icon.png",
   "environment": "client",
   "entrypoints": {
