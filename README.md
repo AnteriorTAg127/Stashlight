@@ -1,8 +1,8 @@
-# StashLight
+# Stashlight
 
 **Find your forgotten items.**
 
-StashLight is a lightweight, client-side Fabric mod that passively indexes every container you open, letting you instantly search for items across your world — even inside Shulker Boxes, Bundles, nested inventories, and across dimensions.
+Stashlight is a lightweight, client-side Fabric mod that passively indexes every container you open, letting you instantly search for items across your world — even inside Shulker Boxes, Bundles, nested inventories, and across dimensions.
 
 ## Features
 
@@ -34,6 +34,9 @@ StashLight is a lightweight, client-side Fabric mod that passively indexes every
 ## Usage
 
 Press **NUMPAD 5** to open the search menu (keybind can be changed in Minecraft's controls settings).
+
+
+<img width="1920" height="1080" alt="Stashlight" src="https://github.com/user-attachments/assets/6b419d47-ebb5-476f-9652-d7ea88abeb71" />
 
 ## Requirements
 
