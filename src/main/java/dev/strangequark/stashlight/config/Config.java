@@ -18,7 +18,7 @@ public final class Config {
     private static final Path FILE =
             FabricLoader.getInstance()
                     .getConfigDir()
-                    .resolve("chestfinder.json");
+                    .resolve("stashlight.json");
 
     private static Config INSTANCE;
 
