@@ -8,9 +8,9 @@
     "Strange Quark"
   ],
   "contact": {
-    "homepage": "https://github.com/StrangeQuark/Container-Lookup",
-    "sources": "https://github.com/StrangeQuark/Container-Lookup",
-    "issues": "https://github.com/StrangeQuark/Container-Lookup/issues"
+    "homepage": "https://github.com/StrangeQuark/Stashlight",
+    "sources": "https://github.com/StrangeQuark/Stashlight",
+    "issues": "https://github.com/StrangeQuark/Stashlight/issues"
   },
   "license": "GPL-3.0-or-later",
   "icon": "assets/stashlight/icon.png",
