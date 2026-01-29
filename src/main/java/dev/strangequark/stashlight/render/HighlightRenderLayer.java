@@ -4,8 +4,10 @@ import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.DepthTestFunction;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import dev.strangequark.stashlight.Stashlight;
+import dev.strangequark.stashlight.mixin.RenderLayerInvoker;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.RenderSetup;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.util.Identifier;
 
@@ -19,13 +21,8 @@ public class HighlightRenderLayer {
                             .build()
             );
 
-    public static final RenderLayer XRAY_LAYER =
-            RenderLayer.MultiPhase.of(
-                    "chestfinder_xray",
-                    256,
-                    false,
-                    true,
-                    XRAY_PIPELINE,
-                    RenderLayer.MultiPhaseParameters.builder().build(false)
-            );
+    public static final RenderLayer XRAY_LAYER = RenderLayerInvoker.of(
+            "chestfinder_xray_lines",
+            RenderSetup.builder(XRAY_PIPELINE).build()
+    );
 }

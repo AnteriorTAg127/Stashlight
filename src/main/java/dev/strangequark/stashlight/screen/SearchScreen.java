@@ -246,8 +246,8 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     @Override
-    public void resize(MinecraftClient client, int width, int height) {
-        super.resize(client, width, height);
+    public void resize(int width, int height) {
+        super.resize(width, height);
         this.refreshGrid(this.searchField.getText());
     }
 

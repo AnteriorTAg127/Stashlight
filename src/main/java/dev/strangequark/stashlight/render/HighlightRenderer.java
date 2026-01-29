@@ -14,7 +14,7 @@ public final class HighlightRenderer {
 
     public static void render(WorldRenderContext context) {
         VertexConsumer vc = context.consumers().getBuffer(HighlightRenderLayer.XRAY_LAYER);
-        Vec3d cam = context.gameRenderer().getCamera().getPos();
+        Vec3d cam = context.gameRenderer().getCamera().getCameraPos();
 
         HighlightManager.removeExpired();
 
