@@ -1,8 +1,8 @@
 # Stashlight
 
-**Find your forgotten items.**
+**Stop searching for items like a maniac and find your forgotten loot instantly.**
 
-Stashlight is a lightweight, client-side Fabric mod that passively indexes every container you open, letting you instantly search for items across your world — even inside Shulker Boxes, Bundles, nested inventories, and across dimensions.
+**Stashlight** is a lightweight, client-side Fabric mod that passively indexes every container you open, letting you instantly search for items across your world — even inside **Shulker Boxes**, **Bundles**, nested inventories, and **across dimensions**.
 
 ## Features
 
@@ -12,31 +12,30 @@ Stashlight is a lightweight, client-side Fabric mod that passively indexes every
 - **Nested container indexing**  
   Caches nested inventories, enabling searches inside shulker boxes and bundles
 
-- **ShulkerBoxTooltip support**  
-  Compatible with ShulkerBoxTooltip mod for enhanced item previews in search results
+- **Enhanced Previews**  
+  Full compatibility with **ShulkerBoxTooltip** for visual item previews directly in the search menu
 
 - **Broad container support**  
-  Works with Chests, Barrels, Shulkers, Hoppers, Droppers, Dispensers, and most modded block entities with inventories*
+  Works with Chests, Barrels, Shulkers, Hoppers, Droppers, Dispensers, and most modded block entities with inventories\*
 
-- **In-world location highlighting**  
-  Clicking a search result highlights the container in the world for easy navigation
+- **Visual in-world highlighting**  
+  Found what you need? Click the result to highlight the container in the world for easy retrieval
 
 - **Cross-dimension tracking**  
-  Tracks containers across Overworld, Nether, End, and modded dimensions*
+  Tracks containers across Overworld, Nether, End, and modded dimensions\*
 
 - **Client-side only**  
   Fully functional without server-side mods or plugins
 
 <br/>
 
-<sub>* _Modded containers and dimensions are untested but expected to work_</sub>
+<sub>\* _Modded containers and dimensions are untested but expected to work_</sub>
 
 ## Usage
 
 Press **NUMPAD 5** to open the search menu (keybind can be changed in Minecraft's controls settings).
 
-
-<img width="1920" height="1080" alt="Stashlight" src="https://github.com/user-attachments/assets/6b419d47-ebb5-476f-9652-d7ea88abeb71" />
+![Stashlight Search Screen](https://cdn.modrinth.com/data/cached_images/70b8fe91f150947cd55b94afbe3f62f7ba95849c_0.webp)
 
 ## Requirements
 
@@ -45,4 +44,4 @@ Press **NUMPAD 5** to open the search menu (keybind can be changed in Minecraft'
 
 ## License
 
-This project is licensed under the [**GNU General Public License v3.0**](LICENSE)
+This project is licensed under the [**GNU General Public License v3.0**](https://github.com/Strange-Quark-007/Stashlight?tab=GPL-3.0-1-ov-file#readme)
