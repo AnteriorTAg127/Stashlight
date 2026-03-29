@@ -93,7 +93,7 @@ public class ItemGrid extends BaseUIComponent {
             ItemStack stack = items.get(i).stack();
             int iconX = slotX + (SLOT_SIZE - 16) / 2;
             int iconY = slotY + (SLOT_SIZE - 16) / 2;
-            graphics.renderItem(stack, iconX, iconY);
+            graphics.item(stack, iconX, iconY);
 
             // Count label
             int count = stack.getCount();

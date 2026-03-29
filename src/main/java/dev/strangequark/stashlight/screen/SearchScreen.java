@@ -14,10 +14,8 @@ import io.wispforest.owo.ui.container.ScrollContainer;
 import io.wispforest.owo.ui.container.UIContainers;
 import io.wispforest.owo.ui.core.*;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -241,16 +239,24 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
         // 2. Check Shulker-like containers
         var container = item.stack().get(DataComponents.CONTAINER);
         if (container != null) {
-            for (ItemStack inner : container.nonEmptyItems()) {
-                if (inner.getHoverName().getString().toLowerCase().contains(lowerQuery)) return true;
+            boolean found = container
+                    .nonEmptyItemCopyStream()
+                    .anyMatch(inner -> inner.getHoverName().getString().toLowerCase().contains(lowerQuery));
+
+            if (found) {
+                return true;
             }
         }
 
         // 3. Check Bundles
         var bundle = item.stack().get(DataComponents.BUNDLE_CONTENTS);
         if (bundle != null) {
-            for (ItemStack inner : bundle.items()) {
-                if (inner.getHoverName().getString().toLowerCase().contains(lowerQuery)) return true;
+            boolean found = bundle
+                    .itemCopyStream()
+                    .anyMatch(inner -> inner.getHoverName().getString().toLowerCase().contains(lowerQuery));
+
+            if (found) {
+                return true;
             }
         }
 
@@ -258,19 +264,18 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     @Override
-    public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
-        // Debounce: fire refreshGrid only after typing has settled for DEBOUNCE_MS.
+    public void extractRenderState(net.minecraft.client.gui.GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         if (pendingQuery != null && System.currentTimeMillis() - lastQueryChangeTime >= DEBOUNCE_MS) {
             refreshGrid(pendingQuery);
             pendingQuery = null;
         }
-        super.render(context, mouseX, mouseY, delta);
+        super.extractRenderState(context, mouseX, mouseY, delta);
     }
 
     @Override
-    public void renderBackground(GuiGraphics context, int mouseX, int mouseY, float delta) {
+    public void extractBackground(net.minecraft.client.gui.GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         context.blurBeforeThisStratum();
-        super.renderBackground(context, mouseX, mouseY, delta);
+        super.extractBackground(context, mouseX, mouseY, delta);
     }
 
     @Override

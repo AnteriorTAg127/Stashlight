@@ -1,7 +1,8 @@
 package dev.strangequark.stashlight.render;
 
+import com.mojang.blaze3d.pipeline.DepthStencilState;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.platform.DepthTestFunction;
+import com.mojang.blaze3d.platform.CompareOp;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import dev.strangequark.stashlight.Stashlight;
@@ -12,12 +13,16 @@ import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.resources.Identifier;
 
 public class HighlightRenderLayer {
+
+    private static final DepthStencilState XRAY_DEPTH_STATE = new DepthStencilState(CompareOp.ALWAYS_PASS, false);
+
+
     public static final RenderPipeline XRAY_PIPELINE =
             RenderPipelines.register(
                     RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
                             .withLocation(Identifier.fromNamespaceAndPath(Stashlight.MOD_ID, "xray"))
                             .withVertexFormat(DefaultVertexFormat.POSITION_COLOR, VertexFormat.Mode.QUADS)
-                            .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+                            .withDepthStencilState(XRAY_DEPTH_STATE)
                             .build()
             );
 

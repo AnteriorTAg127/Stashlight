@@ -50,6 +50,6 @@ public final class HighlightManager {
     }
 
     private static void notifyWrongDimension(@NotNull Player player) {
-        player.displayClientMessage(Component.translatable("render.stashlight.highlight.incorrectDimension").withStyle(ChatFormatting.RED), false);
+        player.sendOverlayMessage(Component.translatable("render.stashlight.highlight.incorrectDimension").withStyle(ChatFormatting.RED));
     }
 }
