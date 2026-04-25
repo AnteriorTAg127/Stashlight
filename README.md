@@ -35,7 +35,7 @@
 
 Press **NUMPAD 5** to open the search menu (keybind can be changed in Minecraft's controls settings).
 
-![Stashlight Search Screen](https://cdn.modrinth.com/data/cached_images/70b8fe91f150947cd55b94afbe3f62f7ba95849c_0.webp)
+![Stashlight Search Screen](https://cdn.modrinth.com/data/2ANiKmkM/images/8240485c0322a914f16022a7b936c62ecba33ba4_350.webp)
 
 ## Requirements
 
