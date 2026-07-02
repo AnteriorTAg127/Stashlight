@@ -31,8 +31,15 @@ public final class Init {
     }
 
     public static Path getFileName() {
+        return ROOT.resolve(getBaseFileName() + ".dat");
+    }
+
+    public static Path getServerFileName() {
+        return ROOT.resolve(getBaseFileName() + ".server.dat");
+    }
+
+    private static String getBaseFileName() {
         Minecraft client = Minecraft.getInstance();
-        String fileName;
 
         if (client.isSingleplayer()) {
             var server = client.getSingleplayerServer();
@@ -41,7 +48,7 @@ public final class Init {
             }
             Path worldFolder = server.getWorldPath(LevelResource.ROOT).normalize();
 
-            fileName = worldFolder.getFileName().toString()
+            return worldFolder.getFileName().toString()
                     .replace(" ", "_")
                     .replace("(", "_")
                     .replace(")", "_");
@@ -50,9 +57,7 @@ public final class Init {
             if (info == null) {
                 throw new IllegalStateException("Multiplayer server info missing");
             }
-            fileName = "MP_" + info.ip.replace(':', '_').replace('/', '_');
+            return "MP_" + info.ip.replace(':', '_').replace('/', '_');
         }
-
-        return ROOT.resolve(fileName + ".dat");
     }
 }

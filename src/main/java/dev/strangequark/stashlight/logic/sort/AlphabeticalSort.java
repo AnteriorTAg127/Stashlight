@@ -1,7 +1,7 @@
 package dev.strangequark.stashlight.logic.sort;
 
 import dev.strangequark.stashlight.gui.UIStyle;
-import dev.strangequark.stashlight.model.IndexedItem;
+import dev.strangequark.stashlight.model.DisplayItem;
 import net.minecraft.network.chat.Component;
 
 import java.util.Comparator;
@@ -24,7 +24,7 @@ public class AlphabeticalSort implements SortStrategy {
     }
 
     @Override
-    public void sort(List<IndexedItem> items) {
-        items.sort(Comparator.comparing(IndexedItem::searchKey));
+    public void sort(List<DisplayItem> items) {
+        items.sort(Comparator.comparing(a -> a.stack().getHoverName().getString().toLowerCase()));
     }
 }

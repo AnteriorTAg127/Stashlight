@@ -1,12 +1,20 @@
 package dev.strangequark.stashlight.screen;
 
+import dev.strangequark.stashlight.Stashlight;
 import dev.strangequark.stashlight.config.Config;
+import dev.strangequark.stashlight.gui.EnchantFilterPanel;
 import dev.strangequark.stashlight.gui.ItemGrid;
 import dev.strangequark.stashlight.logic.filter.*;
 import dev.strangequark.stashlight.logic.sort.SortManager;
+import dev.strangequark.stashlight.model.DataSourceMode;
+import dev.strangequark.stashlight.model.DisplayItem;
+import dev.strangequark.stashlight.model.EnchantEntry;
 import dev.strangequark.stashlight.model.IndexedItem;
+import dev.strangequark.stashlight.model.StackKey;
+import dev.strangequark.stashlight.render.HighlightManager;
 import dev.strangequark.stashlight.repository.ContainerRepository;
 import dev.strangequark.stashlight.util.Util;
+import com.mojang.blaze3d.platform.InputConstants;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.*;
 import io.wispforest.owo.ui.container.Containers;
@@ -15,10 +23,11 @@ import io.wispforest.owo.ui.container.ScrollContainer;
 import io.wispforest.owo.ui.core.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.NotNull;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,14 +44,29 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
 
     private final FilterManager filterManager = new FilterManager();
     private final SortManager sortManager;
+    private final EnchantFilterState enchantState = new EnchantFilterState();
+    private EnchantFilterPanel enchantPanel;
+    private FlowLayout enchantPanelWrapper;
+    private ScrollContainer<FlowLayout> enchantScroll;
+    private ButtonComponent modeButton;
+    private ButtonComponent logicButton;
+    private ButtonComponent sourceButton;
+    private ButtonComponent refreshButton;
+    private LabelComponent syncTimeLabel;
+
+    private SearchMode mode = SearchMode.ITEM;
+    private DataSourceMode dataSourceMode;
 
     private static final long DEBOUNCE_MS = 150;
     private String pendingQuery = null;
     private long lastQueryChangeTime = 0;
 
+    private List<IndexedItem> lastFilteredItems = new ArrayList<>();
+
     public SearchScreen(ContainerRepository repository) {
         this.repository = repository;
         this.sortManager = new SortManager(Config.get().sortKey());
+        this.dataSourceMode = Config.get().dataSource().mode();
         setupFilters();
     }
 
@@ -53,12 +77,12 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
 
         if (world != null) {
             currentDim = Util.getDimensionName(world);
-            strategies.add(new DimensionFilter("Current", currentDim));
+            strategies.add(new DimensionFilter(Component.translatable("gui.stashlight.label.dimensionCurrent"), currentDim));
         }
 
-        strategies.add(new DimensionFilter("All", null));
+        strategies.add(new DimensionFilter(Component.translatable("gui.stashlight.label.dimensionAll"), null));
 
-        repository.getDimensions().forEach(dim -> strategies.add(new DimensionFilter(dim, dim)));
+        repository.getDimensions().forEach(dim -> strategies.add(new DimensionFilter(Component.literal(dim), dim)));
 
         filterManager.setCyclingStrategies(strategies);
         filterManager.addAlwaysOn(new SmallContainerFilter());
@@ -103,6 +127,10 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
                 .gap(GAP)
                 .alignment(HorizontalAlignment.CENTER, VerticalAlignment.CENTER);
 
+        this.modeButton = (ButtonComponent) Components
+                .button(Component.translatable("gui.stashlight.mode.item"), b -> toggleMode())
+                .sizing(Sizing.fixed(COMPONENT_HEIGHT), Sizing.fixed(COMPONENT_HEIGHT));
+
         ButtonComponent sortBtn = (ButtonComponent) Components
                 .button(Component.literal(sortManager.getCurrent().getLabel()), b -> {
                     sortManager.cycle();
@@ -118,6 +146,17 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
         this.searchField.setMaxLength(100);
         this.searchField.onChanged().subscribe(text -> {
             config.setSearchQuery(text);
+            boolean wantsEnchant = text.toLowerCase().startsWith("@ench:");
+            if (wantsEnchant && mode != SearchMode.ENCHANT) {
+                mode = SearchMode.ENCHANT;
+                enchantState.clear();
+                enchantState.apply(EnchantQueryParser.parse(text, collectAvailableEnchants()));
+                updateModeUi();
+            } else if (!wantsEnchant && mode != SearchMode.ITEM) {
+                mode = SearchMode.ITEM;
+                enchantState.clear();
+                updateModeUi();
+            }
             // Don't rebuild immediately — record the change and let the debounce
             // in render() fire refreshGrid once typing has settled.
             this.pendingQuery = text;
@@ -125,17 +164,57 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
         });
 
         ButtonComponent dimFilterBtn = (ButtonComponent) Components.button(
-                        Component.translatable("gui.stashlight.label.dimension").append(": ").append(filterManager.getCurrentLabel()),
+                        Component.translatable("gui.stashlight.label.dimensionWithValue", filterManager.getCurrentLabel()),
                         b -> {
                             filterManager.cycle();
-                            b.setMessage(Component.translatable("gui.stashlight.label.dimension").append(": ").append(filterManager.getCurrentLabel()));
+                            b.setMessage(Component.translatable("gui.stashlight.label.dimensionWithValue", filterManager.getCurrentLabel()));
                             refreshGrid(searchField.getValue());
                         })
                 .sizing(Sizing.fixed(FILTER_WIDTH), Sizing.fixed(COMPONENT_HEIGHT));
 
-        searchBar.child(sortBtn).child(this.searchField).child(dimFilterBtn);
+        this.logicButton = (ButtonComponent) Components
+                .button(Component.translatable("gui.stashlight.logic.and"), b -> toggleLogicMode())
+                .sizing(Sizing.fixed(LOGIC_BUTTON_WIDTH), Sizing.fixed(COMPONENT_HEIGHT));
 
-        // --- 3. SCROLLABLE GRID ---
+        ButtonComponent highlightAllBtn = (ButtonComponent) Components
+                .button(Component.translatable("gui.stashlight.button.highlightAll"), b -> {
+                    int count = HighlightManager.highlightAll(lastFilteredItems);
+                    if (count > 0) {
+                        Minecraft.getInstance().setScreen(null);
+                    }
+                })
+                .tooltip(Component.translatable("gui.stashlight.button.highlightAll.tooltip"))
+                .sizing(Sizing.fixed(COMPONENT_HEIGHT), Sizing.fixed(COMPONENT_HEIGHT));
+
+        this.sourceButton = (ButtonComponent) Components
+                .button(Component.translatable("gui.stashlight.dataSource." + dataSourceMode.name().toLowerCase()), b -> cycleDataSource())
+                .tooltip(Component.translatable("gui.stashlight.dataSource.tooltip"))
+                .sizing(Sizing.fixed(FILTER_WIDTH), Sizing.fixed(COMPONENT_HEIGHT));
+
+        this.refreshButton = (ButtonComponent) Components
+                .button(Component.translatable("gui.stashlight.button.refresh"), b -> {
+                    var window = Minecraft.getInstance().getWindow();
+                    if (InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_SHIFT)
+                            || InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_SHIFT)) {
+                        requestServerScanForceFull();
+                    } else {
+                        requestServerScan();
+                    }
+                })
+                .tooltip(Component.translatable("gui.stashlight.button.refresh.tooltip"))
+                .sizing(Sizing.fixed(COMPONENT_HEIGHT), Sizing.fixed(COMPONENT_HEIGHT));
+
+        searchBar.child(modeButton).child(sortBtn).child(this.searchField).child(dimFilterBtn)
+                .child(logicButton).child(highlightAllBtn).child(sourceButton).child(refreshButton);
+
+        // --- 3. ENCHANTMENT FILTER PANEL ---
+        this.enchantPanelWrapper = (FlowLayout) Containers.verticalFlow(Sizing.fixed(0), Sizing.fill(100)).gap(GAP);
+        this.enchantPanel = new EnchantFilterPanel(enchantState, this::onEnchantToggle, () -> {
+            updateEnchantPanel();
+            refreshGrid(searchField.getValue());
+        });
+
+        // --- 4. SCROLLABLE GRID ---
         FlowLayout gridWrapper = (FlowLayout) Containers.verticalFlow(Sizing.fill(100), Sizing.expand(100))
                 .surface(Surface.outline(GRID_BORDER))
                 .padding(Insets.of(BORDER));
@@ -164,8 +243,12 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
 
         gridWrapper.child(scrollContainer);
 
-        // --- 4. FOOTER ---
-        FlowLayout footer = (FlowLayout) Containers.horizontalFlow(Sizing.fill(100), Sizing.fixed(COMPONENT_HEIGHT))
+        // --- 5. FOOTER ---
+        FlowLayout footer = (FlowLayout) Containers.verticalFlow(Sizing.fill(100), Sizing.content())
+                .gap(GAP)
+                .verticalAlignment(VerticalAlignment.CENTER);
+
+        FlowLayout footerRow1 = (FlowLayout) Containers.horizontalFlow(Sizing.fill(100), Sizing.fixed(COMPONENT_HEIGHT))
                 .gap(GAP)
                 .verticalAlignment(VerticalAlignment.CENTER);
 
@@ -200,36 +283,90 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
             refreshGrid(searchField.getValue());
         });
 
-        footer.child(distanceSlider).child(lookAtCheckbox).child(showSmallCheckbox);
+        footerRow1.child(distanceSlider).child(lookAtCheckbox).child(showSmallCheckbox);
+
+        FlowLayout footerRow2 = (FlowLayout) Containers.horizontalFlow(Sizing.fill(100), Sizing.fixed(COMPONENT_HEIGHT))
+                .gap(GAP)
+                .verticalAlignment(VerticalAlignment.CENTER);
+
+        ButtonComponent settingsButton = (ButtonComponent) Components
+                .button(Component.translatable("gui.stashlight.button.highlightSettings"), b ->
+                        Minecraft.getInstance().setScreen(new HighlightSettingsScreen(this)))
+                .tooltip(Component.translatable("gui.stashlight.button.highlightSettings.tooltip"))
+                .sizing(Sizing.fixed(COMPONENT_HEIGHT), Sizing.fixed(COMPONENT_HEIGHT));
+
+        this.syncTimeLabel = (LabelComponent) Components.label(Component.empty())
+                .shadow(true);
+
+        footerRow2.child(settingsButton).child(this.syncTimeLabel);
+        footer.child(footerRow1).child(footerRow2);
 
         // --- ASSEMBLE ---
-        mainWindow.child(title).child(searchBar).child(gridWrapper).child(footer);
+        FlowLayout contentArea = (FlowLayout) Containers.horizontalFlow(Sizing.fill(100), Sizing.expand(100)).gap(GAP);
+        contentArea.child(enchantPanelWrapper).child(gridWrapper);
+
+        mainWindow.child(title).child(searchBar).child(contentArea).child(footer);
         rootComponent.child(mainWindow).alignment(HorizontalAlignment.CENTER, VerticalAlignment.CENTER);
+
+        updateModeUi();
+        updateSourceButton();
+        requestServerScan();
     }
 
     private void refreshGrid(String query) {
         int windowWidth = (int) (this.width * (SCREEN_FILL_PERCENT / 100.0));
-        // Subtract mainWindow padding (×2), scrollbar width, and gap (reserved for ItemGrid's internal padding)
-        int availableVars = (PADDING * 2) + SCROLL_WIDTH + GAP + (BORDER * 2);
-        int availableWidth = windowWidth - availableVars;
-        int slotsPerRow = Math.max(1, availableWidth / (SLOT_SIZE + GAP));
+        int enchantPanelWidth = (mode == SearchMode.ENCHANT) ? ENCHANT_PANEL_WIDTH : 0;
+        int contentAreaVars = (PADDING * 2) + GAP + enchantPanelWidth;
+        int gridVars = SCROLL_WIDTH + GAP + (BORDER * 2);
+        int maxGridWidth = windowWidth - contentAreaVars - gridVars;
+        int slotsPerRow = Math.max(1, maxGridWidth / (SLOT_SIZE + GAP));
 
         // Snap window width to exactly fit the columns
-        int contentWidth = slotsPerRow * (SLOT_SIZE + GAP) + GAP;
-        int snappedWidth = contentWidth + availableVars;
+        int gridContentWidth = slotsPerRow * (SLOT_SIZE + GAP) + GAP;
+        int gridWidth = gridContentWidth + gridVars;
+        int contentAreaWidth = gridWidth + enchantPanelWidth + GAP;
+        int snappedWidth = contentAreaWidth + (PADDING * 2);
         if (this.mainWindow != null) {
             this.mainWindow.horizontalSizing(Sizing.fixed(snappedWidth));
         }
 
-        final String lowerQuery = query.toLowerCase();
+        List<IndexedItem> source = repository.getSearchIndex(dataSourceMode);
+        List<IndexedItem> filteredItems;
 
-        List<IndexedItem> sortedItems = repository.getSearchIndex().stream()
-                .filter(item -> matchesDeep(item, lowerQuery) && filterManager.matches(item))
-                .collect(Collectors.toCollection(ArrayList::new));
+        if (mode == SearchMode.ENCHANT) {
+            filteredItems = source.stream()
+                    .filter(item -> enchantState.matches(item) && filterManager.matches(item))
+                    .collect(Collectors.toCollection(ArrayList::new));
+        } else {
+            final String lowerQuery = query.toLowerCase();
+            filteredItems = source.stream()
+                    .filter(item -> matchesDeep(item, lowerQuery) && filterManager.matches(item))
+                    .collect(Collectors.toCollection(ArrayList::new));
+        }
 
-        if (sortManager.getCurrent() != null) sortManager.getCurrent().sort(sortedItems);
+        this.lastFilteredItems = filteredItems;
 
-        this.itemGrid.setItems(sortedItems, slotsPerRow);
+        List<DisplayItem> aggregated = aggregate(filteredItems);
+
+        if (sortManager.getCurrent() != null) sortManager.getCurrent().sort(aggregated);
+
+        this.itemGrid.setItems(aggregated, slotsPerRow);
+    }
+
+    private static List<DisplayItem> aggregate(List<IndexedItem> items) {
+        java.util.Map<StackKey, List<IndexedItem>> groups = new java.util.LinkedHashMap<>();
+        for (IndexedItem item : items) {
+            groups.computeIfAbsent(new StackKey(item.stack()), k -> new ArrayList<>()).add(item);
+        }
+
+        List<DisplayItem> result = new ArrayList<>();
+        for (var group : groups.values()) {
+            IndexedItem first = group.get(0);
+            ItemStack merged = first.stack().copy();
+            merged.setCount(group.stream().mapToInt(i -> i.stack().getCount()).sum());
+            result.add(new DisplayItem(merged, group));
+        }
+        return result;
     }
 
     public static boolean matchesDeep(IndexedItem item, String lowerQuery) {
@@ -238,23 +375,170 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
         // 1. Check main item name (searchKey is already lowercase)
         if (item.searchKey().contains(lowerQuery)) return true;
 
-        // 2. Check Shulker-like containers
-        var container = item.stack().get(DataComponents.CONTAINER);
-        if (container != null) {
-            for (ItemStack inner : container.nonEmptyItems()) {
-                if (inner.getHoverName().getString().toLowerCase().contains(lowerQuery)) return true;
-            }
-        }
-
-        // 3. Check Bundles
-        var bundle = item.stack().get(DataComponents.BUNDLE_CONTENTS);
-        if (bundle != null) {
-            for (ItemStack inner : bundle.items()) {
-                if (inner.getHoverName().getString().toLowerCase().contains(lowerQuery)) return true;
-            }
+        // 2. Check enchantments
+        for (var enchant : item.enchantments()) {
+            if (enchant.displayName().getString().toLowerCase().contains(lowerQuery)) return true;
+            if (enchant.id().toString().toLowerCase().contains(lowerQuery)) return true;
         }
 
         return false;
+    }
+
+    private void toggleMode() {
+        mode = (mode == SearchMode.ITEM) ? SearchMode.ENCHANT : SearchMode.ITEM;
+        updateModeUi();
+        refreshGrid(searchField.getValue());
+    }
+
+    private void toggleLogicMode() {
+        enchantState.setAndMode(!enchantState.isAndMode());
+        updateModeUi();
+        refreshGrid(searchField.getValue());
+    }
+
+    private void onEnchantToggle(ResourceLocation id) {
+        enchantState.toggle(id, 1, 255);
+        updateEnchantPanel();
+        refreshGrid(searchField.getValue());
+    }
+
+    private void cycleDataSource() {
+        dataSourceMode = switch (dataSourceMode) {
+            case LOCAL -> DataSourceMode.SERVER;
+            case SERVER -> DataSourceMode.MERGED;
+            case MERGED -> DataSourceMode.LOCAL;
+        };
+        Config.get().dataSource().setMode(dataSourceMode);
+        Config.save();
+        updateSourceButton();
+        requestServerScan();
+        refreshGrid(searchField.getValue());
+    }
+
+    private void requestServerScan() {
+        if (dataSourceMode == DataSourceMode.LOCAL) return;
+        var stashlight = Stashlight.getInstance();
+        if (stashlight != null && stashlight.isServerModPresent() && stashlight.isServerEnabled()) {
+            stashlight.requestServerScan();
+        }
+    }
+
+    private void requestServerScanForceFull() {
+        if (dataSourceMode == DataSourceMode.LOCAL) return;
+        var stashlight = Stashlight.getInstance();
+        if (stashlight != null && stashlight.isServerModPresent() && stashlight.isServerEnabled()) {
+            stashlight.requestServerScanForceFull();
+        }
+    }
+
+    private void updateSyncTimeLabel() {
+        if (syncTimeLabel == null) return;
+        var stashlight = Stashlight.getInstance();
+        if (stashlight == null) {
+            syncTimeLabel.text(Component.empty());
+            return;
+        }
+        long lastTime = stashlight.getLastServerDataTime();
+        if (lastTime <= 0) {
+            syncTimeLabel.text(Component.translatable("gui.stashlight.label.syncNever"));
+        } else {
+            long secondsAgo = (System.currentTimeMillis() - lastTime) / 1000;
+            syncTimeLabel.text(Component.translatable("gui.stashlight.label.syncAgo", secondsAgo));
+        }
+    }
+
+    private void updateSourceButton() {
+        if (sourceButton == null) return;
+        sourceButton.setMessage(Component.translatable("gui.stashlight.dataSource." + dataSourceMode.name().toLowerCase()));
+
+        var stashlight = Stashlight.getInstance();
+        boolean serverAvailable = stashlight != null && stashlight.isServerModPresent() && stashlight.isServerEnabled();
+        sourceButton.active = serverAvailable;
+        if (refreshButton != null) {
+            refreshButton.active = serverAvailable && dataSourceMode != DataSourceMode.LOCAL;
+        }
+    }
+
+    private void updateModeUi() {
+        if (modeButton == null || logicButton == null || enchantPanelWrapper == null) return;
+
+        modeButton.setMessage(Component.translatable(mode == SearchMode.ITEM
+                ? "gui.stashlight.mode.item"
+                : "gui.stashlight.mode.enchant"));
+        logicButton.setMessage(Component.translatable(enchantState.isAndMode()
+                ? "gui.stashlight.logic.and"
+                : "gui.stashlight.logic.or"));
+        logicButton.active = (mode == SearchMode.ENCHANT);
+
+        enchantPanelWrapper.clearChildren();
+        if (mode == SearchMode.ENCHANT) {
+            enchantPanelWrapper.horizontalSizing(Sizing.fixed(ENCHANT_PANEL_WIDTH));
+            if (this.enchantScroll == null) {
+                this.enchantScroll = Containers
+                        .verticalScroll(Sizing.fill(100), Sizing.fill(100), enchantPanel.root())
+                        .scrollbarThiccness(SCROLL_WIDTH)
+                        .scrollbar(ScrollContainer.Scrollbar.vanillaFlat());
+            }
+            enchantPanelWrapper.child(this.enchantScroll);
+            updateEnchantPanel();
+        } else {
+            enchantPanelWrapper.horizontalSizing(Sizing.fixed(0));
+        }
+    }
+
+    private void updateEnchantPanel() {
+        double offset = this.enchantScroll != null ? getScrollOffset(this.enchantScroll) : 0;
+        int maxScroll = this.enchantScroll != null ? getMaxScroll(this.enchantScroll) : 0;
+        double ratio = maxScroll > 0 ? offset / maxScroll : 0;
+
+        enchantPanel.update(collectAvailableEnchants());
+
+        if (this.enchantScroll != null) {
+            this.enchantScroll.queue(() -> this.enchantScroll.scrollTo(ratio));
+        }
+    }
+
+    private static double getScrollOffset(ScrollContainer<?> container) {
+        try {
+            var field = ScrollContainer.class.getDeclaredField("scrollOffset");
+            field.setAccessible(true);
+            return field.getDouble(container);
+        } catch (Exception ignored) {
+            return 0;
+        }
+    }
+
+    private static int getMaxScroll(ScrollContainer<?> container) {
+        try {
+            var field = ScrollContainer.class.getDeclaredField("maxScroll");
+            field.setAccessible(true);
+            return field.getInt(container);
+        } catch (Exception ignored) {
+            return 0;
+        }
+    }
+
+    private List<EnchantEntry> collectAvailableEnchants() {
+        List<EnchantEntry> available = new ArrayList<>();
+        for (var entry : repository.getEnchantmentIndex(dataSourceMode).entrySet()) {
+            ResourceLocation id = entry.getKey();
+            outer:
+            for (IndexedItem item : entry.getValue()) {
+                for (EnchantEntry e : item.enchantments()) {
+                    if (e.id().equals(id)) {
+                        available.add(e);
+                        break outer;
+                    }
+                }
+            }
+        }
+        return available;
+    }
+
+    public void refreshFromServer() {
+        if (this.searchField != null) {
+            refreshGrid(this.searchField.getValue());
+        }
     }
 
     @Override
@@ -264,6 +548,7 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
             refreshGrid(pendingQuery);
             pendingQuery = null;
         }
+        updateSyncTimeLabel();
         super.render(context, mouseX, mouseY, delta);
     }
 

@@ -11,10 +11,12 @@ public final class RadiusFilter implements FilterStrategy {
     private static final int DEFAULT_INDEX = 2;
 
     @Override
-    public String getLabel() {
+    public Component getLabel() {
         int index = Config.get().searchRadiusIndex();
         int val = RADIUS_VALUES[index];
-        return val == -1 ? "All" : val + " (Chunks)";
+        return val == -1
+                ? Component.translatable("gui.stashlight.label.rangeAll")
+                : Component.translatable("gui.stashlight.label.rangeChunks", val);
     }
 
     @Override

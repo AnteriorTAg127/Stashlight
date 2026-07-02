@@ -1,7 +1,7 @@
 package dev.strangequark.stashlight.logic.sort;
 
 import dev.strangequark.stashlight.gui.UIStyle;
-import dev.strangequark.stashlight.model.IndexedItem;
+import dev.strangequark.stashlight.model.DisplayItem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -28,14 +28,14 @@ public class DistanceSort implements SortStrategy {
     }
 
     @Override
-    public void sort(List<IndexedItem> items) {
+    public void sort(List<DisplayItem> items) {
         var player = Minecraft.getInstance().player;
         if (player == null) return;
 
         BlockPos playerPos = player.getOnPos();
 
-        Map<IndexedItem, Double> distCache = new IdentityHashMap<>(items.size());
-        for (IndexedItem item : items) {
+        Map<DisplayItem, Double> distCache = new IdentityHashMap<>(items.size());
+        for (DisplayItem item : items) {
             distCache.put(item, item.pos().distSqr(playerPos));
         }
 

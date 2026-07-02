@@ -1,6 +1,7 @@
 package dev.strangequark.stashlight.logic.filter;
 
 import dev.strangequark.stashlight.model.IndexedItem;
+import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,7 +36,7 @@ public class FilterManager {
         return cycling.get(currentIndex).matches(item);
     }
 
-    public String getCurrentLabel() {
-        return cycling.isEmpty() ? "" : cycling.get(currentIndex).getLabel();
+    public Component getCurrentLabel() {
+        return cycling.isEmpty() ? Component.empty() : cycling.get(currentIndex).getLabel();
     }
 }

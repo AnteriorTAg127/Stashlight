@@ -7,7 +7,8 @@ public class SortManager {
     private static final Map<SortKey, SortStrategy> STRATEGIES = Map.of(
             SortKey.ALPHABETICAL, new AlphabeticalSort(),
             SortKey.COUNT, new CountSort(),
-            SortKey.DISTANCE, new DistanceSort()
+            SortKey.DISTANCE, new DistanceSort(),
+            SortKey.ENCHANT_COUNT, new EnchantCountSort()
     );
 
     private SortKey current;

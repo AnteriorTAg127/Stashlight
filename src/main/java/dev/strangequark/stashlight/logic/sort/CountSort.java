@@ -1,7 +1,7 @@
 package dev.strangequark.stashlight.logic.sort;
 
 import dev.strangequark.stashlight.gui.UIStyle;
-import dev.strangequark.stashlight.model.IndexedItem;
+import dev.strangequark.stashlight.model.DisplayItem;
 import net.minecraft.network.chat.Component;
 
 import java.util.List;
@@ -23,7 +23,7 @@ public class CountSort implements SortStrategy {
     }
 
     @Override
-    public void sort(List<IndexedItem> items) {
-        items.sort((a, b) -> Integer.compare(b.stack().getCount(), a.stack().getCount()));
+    public void sort(List<DisplayItem> items) {
+        items.sort((a, b) -> Integer.compare(b.totalCount(), a.totalCount()));
     }
 }

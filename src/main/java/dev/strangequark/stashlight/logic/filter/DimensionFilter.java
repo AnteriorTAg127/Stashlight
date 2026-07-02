@@ -1,18 +1,19 @@
 package dev.strangequark.stashlight.logic.filter;
 
 import dev.strangequark.stashlight.model.IndexedItem;
+import net.minecraft.network.chat.Component;
 
 public class DimensionFilter implements FilterStrategy {
-    private final String label;
+    private final Component label;
     private final String dimension;
 
-    public DimensionFilter(String label, String dimension) {
+    public DimensionFilter(Component label, String dimension) {
         this.label = label;
         this.dimension = dimension;
     }
 
     @Override
-    public String getLabel() {
+    public Component getLabel() {
         return label;
     }
 

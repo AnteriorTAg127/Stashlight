@@ -4,6 +4,7 @@ public class UIStyle {
     public static final String SORT_NAME = "Aa";
     public static final String SORT_COUNT = "#↓";
     public static final String SORT_DIST = "◎";
+    public static final String SORT_ENCHANT_COUNT = "En#";
 
     public static final int GAP = 4;
     public static final int PADDING = 8;
@@ -14,8 +15,11 @@ public class UIStyle {
     public static final int FILTER_WIDTH = 150;
     public static final int SEARCH_WIDTH = 200;
     public static final int SLIDER_WIDTH = 150;
+    public static final int LOGIC_BUTTON_WIDTH = 40;
     public static final int SCROLL_WIDTH = 6;
-    
+    public static final int ENCHANT_PANEL_MAX_HEIGHT = 160;
+    public static final int ENCHANT_PANEL_WIDTH = 180;
+
     public static final int SCREEN_FILL_PERCENT = 95;
 
     public static final int GRID_BORDER = 0xFF555555;

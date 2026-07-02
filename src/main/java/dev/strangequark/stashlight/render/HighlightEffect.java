@@ -1,6 +1,5 @@
 package dev.strangequark.stashlight.render;
 
-
 public final class HighlightEffect {
     public static final long TIME_ON = 750;
     public static final long TIME_OFF = 250;
@@ -16,4 +15,3 @@ public final class HighlightEffect {
         return elapsed > MAX_DURATION;
     }
 }
-

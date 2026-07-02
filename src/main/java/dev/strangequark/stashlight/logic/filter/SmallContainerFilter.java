@@ -2,14 +2,15 @@ package dev.strangequark.stashlight.logic.filter;
 
 import dev.strangequark.stashlight.config.Config;
 import dev.strangequark.stashlight.model.IndexedItem;
+import net.minecraft.network.chat.Component;
 
 public final class SmallContainerFilter implements FilterStrategy {
 
     private static final int THRESHOLD = 9;
 
     @Override
-    public String getLabel() {
-        return "";
+    public Component getLabel() {
+        return Component.empty();
     }
 
     @Override

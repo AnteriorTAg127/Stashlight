@@ -1,8 +1,12 @@
 package dev.strangequark.stashlight.gui;
 
 import dev.strangequark.stashlight.config.Config;
+import dev.strangequark.stashlight.model.DisplayItem;
+import dev.strangequark.stashlight.model.EnchantEntry;
 import dev.strangequark.stashlight.model.IndexedItem;
+import dev.strangequark.stashlight.model.LocatePath;
 import dev.strangequark.stashlight.render.HighlightManager;
+import dev.strangequark.stashlight.util.Util;
 import io.wispforest.owo.ui.base.BaseComponent;
 import io.wispforest.owo.ui.core.OwoUIDrawContext;
 import io.wispforest.owo.ui.core.PositionedRectangle;
@@ -11,6 +15,8 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.core.BlockPos;
+import com.mojang.blaze3d.platform.InputConstants;
+import org.lwjgl.glfw.GLFW;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
@@ -20,12 +26,15 @@ import net.minecraft.world.item.TooltipFlag;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static dev.strangequark.stashlight.gui.UIStyle.*;
 
 public class ItemGrid extends BaseComponent {
-    private List<IndexedItem> items = Collections.emptyList();
+    private List<DisplayItem> items = Collections.emptyList();
     private int slotsPerRow = 1;
 
     // Hovered slot index (-1 = none)
@@ -36,7 +45,7 @@ public class ItemGrid extends BaseComponent {
         this.verticalSizing(Sizing.content());
     }
 
-    public void setItems(List<IndexedItem> newItems, int newSlotsPerRow) {
+    public void setItems(List<DisplayItem> newItems, int newSlotsPerRow) {
         this.items = newItems;
         this.slotsPerRow = Math.max(1, newSlotsPerRow);
         this.hoveredIndex = -1;
@@ -90,13 +99,14 @@ public class ItemGrid extends BaseComponent {
 
             // Item icon — render directly at 16x16 centered in the 24x24 slot.
             // No scaling = pixel perfect sharpness.
-            ItemStack stack = items.get(i).stack();
+            DisplayItem displayItem = items.get(i);
+            ItemStack stack = displayItem.stack();
             int iconX = slotX + (SLOT_SIZE - 16) / 2;
             int iconY = slotY + (SLOT_SIZE - 16) / 2;
             graphics.renderItem(stack, iconX, iconY);
 
             // Count label
-            int count = stack.getCount();
+            int count = displayItem.totalCount();
             if (count > 1) {
                 String countStr = String.valueOf(count);
                 float scale = count > 999 ? 0.75f : 0.85f;
@@ -113,12 +123,12 @@ public class ItemGrid extends BaseComponent {
 
             // Tooltip — only for the hovered slot, deferred to end of frame
             if (hovered && mc.player != null && mc.level != null) {
-                renderTooltip(graphics, items.get(i), mouseX, mouseY, mc);
+                renderTooltip(graphics, displayItem, mouseX, mouseY, mc);
             }
         }
     }
 
-    private void renderTooltip(OwoUIDrawContext graphics, IndexedItem item, int mouseX, int mouseY, Minecraft mc) {
+    private void renderTooltip(OwoUIDrawContext graphics, DisplayItem item, int mouseX, int mouseY, Minecraft mc) {
         assert mc.player != null;
         double dist = Math.sqrt(mc.player.blockPosition().distSqr(item.pos()));
         String formattedDist = String.format("%.1f", dist);
@@ -135,12 +145,38 @@ public class ItemGrid extends BaseComponent {
         lines.add(Component.translatable("gui.stashlight.label.container").withStyle(ChatFormatting.GRAY)
                 .append(": ")
                 .append(Component.literal(item.containerName()).withStyle(ChatFormatting.WHITE)));
-        lines.add(Component.translatable("gui.stashlight.label.location").withStyle(ChatFormatting.GRAY)
-                .append(Component.literal(": ").withStyle(ChatFormatting.GRAY))
-                .append(Component.literal(posStr).withStyle(ChatFormatting.AQUA))
-                .append(Component.translatable("gui.stashlight.label.blocksAway", formattedDist).withStyle(ChatFormatting.GRAY)));
+
+        if (isCtrlDown()) {
+            lines.add(Component.translatable("gui.stashlight.label.location").withStyle(ChatFormatting.GRAY)
+                    .append(": ")
+                    .append(Component.translatable("gui.stashlight.label.blocksAway", formattedDist).withStyle(ChatFormatting.GRAY)));
+            for (IndexedItem source : item.sources()) {
+                String sourcePos = String.format("%d, %d, %d",
+                        source.pos().getX(), source.pos().getY(), source.pos().getZ());
+                lines.add(Component.literal("  " + sourcePos).withStyle(ChatFormatting.AQUA));
+            }
+        } else {
+            lines.add(Component.translatable("gui.stashlight.label.location").withStyle(ChatFormatting.GRAY)
+                    .append(Component.literal(": ").withStyle(ChatFormatting.GRAY))
+                    .append(Component.literal(posStr).withStyle(ChatFormatting.AQUA))
+                    .append(Component.translatable("gui.stashlight.label.blocksAway", formattedDist).withStyle(ChatFormatting.GRAY)));
+        }
+
         lines.add(Component.translatable("gui.stashlight.label.dimension").withStyle(ChatFormatting.GRAY).append(": ")
                 .append(Component.literal(item.dimension()).withStyle(ChatFormatting.GREEN)));
+
+        addSlotInfo(lines, item);
+
+        if (!item.enchantments().isEmpty()) {
+            lines.add(Component.empty());
+            lines.add(Component.translatable("gui.stashlight.label.enchantments").withStyle(ChatFormatting.LIGHT_PURPLE));
+            for (EnchantEntry entry : item.enchantments()) {
+                lines.add(Component.literal(" • ")
+                        .append(entry.displayName())
+                        .append(" " + Util.toRoman(entry.level()))
+                        .withStyle(ChatFormatting.GRAY));
+            }
+        }
 
         graphics.setTooltipForNextFrame(
                 mc.font, lines,
@@ -161,12 +197,24 @@ public class ItemGrid extends BaseComponent {
         var mc = Minecraft.getInstance();
         if (mc.player == null) return true;
 
-        IndexedItem item = items.get(idx);
-        if (!HighlightManager.tryHighlight(item)) return true;
+        DisplayItem item = items.get(idx);
+        boolean shift = hasShiftDown();
+        boolean added = HighlightManager.tryHighlight(item, shift);
+        if (!added) return true;
 
-        if (Config.get().lookAtTarget()) lookAt(mc.player, item.pos());
-        mc.setScreen(null);
+        if (Config.get().lookAtTarget() && !shift) lookAt(mc.player, item.pos());
+        if (!shift) mc.setScreen(null);
         return true;
+    }
+
+    private static boolean hasShiftDown() {
+        return Minecraft.getInstance().options.keyShift.isDown();
+    }
+
+    private static boolean isCtrlDown() {
+        Minecraft mc = Minecraft.getInstance();
+        return InputConstants.isKeyDown(mc.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
+                || InputConstants.isKeyDown(mc.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL);
     }
 
     /**
@@ -189,6 +237,52 @@ public class ItemGrid extends BaseComponent {
 
         int idx = row * slotsPerRow + col;
         return idx < items.size() ? idx : -1;
+    }
+
+    private static final int MAX_TOP_SLOTS_SHOWN = 8;
+
+    private void addSlotInfo(List<Component> lines, DisplayItem item) {
+        List<IndexedItem> sources = item.sources();
+        if (sources.isEmpty()) return;
+
+        Set<Integer> topSlots = new LinkedHashSet<>();
+        List<String> nestedPaths = new ArrayList<>();
+
+        for (IndexedItem source : sources) {
+            LocatePath path = source.path();
+            if (path == null || path.slots().isEmpty()) continue;
+            topSlots.add(path.topSlot());
+            if (path.slots().size() > 1) {
+                nestedPaths.add(path.slots().stream()
+                        .map(String::valueOf)
+                        .collect(Collectors.joining(" → ")));
+            }
+        }
+
+        if (topSlots.isEmpty()) return;
+
+        List<Integer> topSlotList = new ArrayList<>(topSlots);
+        StringBuilder slotsBuilder = new StringBuilder();
+        int shown = 0;
+        for (int i = 0; i < topSlotList.size() && i < MAX_TOP_SLOTS_SHOWN; i++) {
+            if (i > 0) slotsBuilder.append(", ");
+            slotsBuilder.append(topSlotList.get(i));
+            shown++;
+        }
+        if (topSlotList.size() > shown) {
+            slotsBuilder.append(", ... (").append(topSlotList.size() - shown).append(" 更多)");
+        }
+
+        lines.add(Component.translatable("gui.stashlight.label.slots").withStyle(ChatFormatting.GRAY)
+                .append(": ")
+                .append(Component.literal(slotsBuilder.toString()).withStyle(ChatFormatting.YELLOW)));
+
+        if (isCtrlDown()) {
+            for (String nested : nestedPaths) {
+                lines.add(Component.literal("  → ").withStyle(ChatFormatting.GRAY)
+                        .append(Component.literal(nested).withStyle(ChatFormatting.DARK_AQUA)));
+            }
+        }
     }
 
     private void lookAt(Player player, BlockPos target) {

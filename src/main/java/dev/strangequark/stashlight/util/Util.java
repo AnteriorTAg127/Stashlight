@@ -28,27 +28,18 @@ public class Util {
 
     public static BlockPos getCanonicalPos(Level level, BlockPos pos) {
         BlockState state = level.getBlockState(pos);
-        if (!(state.getBlock() instanceof ChestBlock chest)) {
+        if (!(state.getBlock() instanceof ChestBlock)) {
             return pos;
         }
 
-        // Ask the vanilla ChestBlock to resolve the inventory. This is our Source of Truth.
-        var inv = ChestBlock.getContainer(chest, state, level, pos, true);
-
-        if (inv instanceof CompoundContainer di) {
-            try {
-                // We use reflection to find the 'first' half of the DoubleInventory.
-                // This aligns our database key with Minecraft's internal 'Master' half.
-                var f = CompoundContainer.class.getDeclaredField("container1");
-                f.setAccessible(true);
-                var first = f.get(di);
-                if (first instanceof BlockEntity be) {
-                    return be.getBlockPos();
-                }
-            } catch (ReflectiveOperationException ignored) {
-            }
+        Set<BlockPos> positions = resolveContainerPositions(level, pos);
+        if (positions.size() <= 1) {
+            return pos;
         }
-        return pos;
+
+        // Deterministic canonical key for double chests: the smaller BlockPos.
+        // Prevents mismatches when the player opens either half of the chest.
+        return positions.stream().min(BlockPos::compareTo).orElse(pos);
     }
 
     public static Set<BlockPos> resolveContainerPositions(Level level, BlockPos pos) {
@@ -75,5 +66,14 @@ public class Util {
         }
 
         return Set.of(pos);
+    }
+
+    private static final String[] ROMAN = {"I", "II", "III", "IV", "V", "X"};
+
+    public static String toRoman(int level) {
+        if (level >= 1 && level <= ROMAN.length) {
+            return ROMAN[level - 1];
+        }
+        return String.valueOf(level);
     }
 }

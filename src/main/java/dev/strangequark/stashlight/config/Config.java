@@ -4,6 +4,7 @@ package dev.strangequark.stashlight.config;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import dev.strangequark.stashlight.logic.sort.SortKey;
+import dev.strangequark.stashlight.model.DataSourceMode;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
@@ -27,6 +28,9 @@ public final class Config {
     private boolean lookAtTarget = false;
     private boolean showSmallContainers = false;
     private int searchRadiusIndex = 2;
+    private HighlightConfig highlight = new HighlightConfig();
+    private AutoIndexConfig autoIndex = new AutoIndexConfig();
+    private DataSourceConfig dataSource = new DataSourceConfig();
 
     /* ---------------- runtime-only state ---------------- */
 
@@ -64,6 +68,21 @@ public final class Config {
             searchRadiusIndex = 2;
         }
         return searchRadiusIndex;
+    }
+
+    public HighlightConfig highlight() {
+        if (highlight == null) highlight = new HighlightConfig();
+        return highlight;
+    }
+
+    public AutoIndexConfig autoIndex() {
+        if (autoIndex == null) autoIndex = new AutoIndexConfig();
+        return autoIndex;
+    }
+
+    public DataSourceConfig dataSource() {
+        if (dataSource == null) dataSource = new DataSourceConfig();
+        return dataSource;
     }
 
     public void setLookAtTarget(boolean value) {
@@ -106,12 +125,162 @@ public final class Config {
 
     private void validate() {
         this.searchRadiusIndex = Math.max(0, Math.min(this.searchRadiusIndex, 5));
+        if (this.highlight == null) this.highlight = new HighlightConfig();
+        if (this.autoIndex == null) this.autoIndex = new AutoIndexConfig();
+        if (this.dataSource == null) this.dataSource = new DataSourceConfig();
+        this.dataSource.validate();
     }
 
     public static void save() {
         try {
             Files.writeString(FILE, GSON.toJson(get()));
         } catch (IOException ignored) {
+        }
+    }
+
+    public static final class HighlightConfig {
+        private boolean blockOutlineEnabled = true;
+        private String blockOutlineColor = "#FFFFFFFF";
+        private int blockOutlineCycles = 5;
+
+        private boolean guiSlotEnabled = true;
+        private String guiSlotColor = "#FF0066AA";
+        private boolean guiSlotPulse = true;
+        private int guiSlotDisplayTimeSeconds = 5;
+
+        private boolean nestedBoxEnabled = true;
+        private String nestedBoxColor = "#FF006688";
+
+        private boolean worldMarkerBeamEnabled = true;
+        private String worldMarkerBeamColor = "#FFCC8800";
+        private boolean worldMarkerBeamThroughWalls = true;
+
+        private boolean worldMarkerBoxEnabled = true;
+        private String worldMarkerBoxColor = "#FFAAAAAA";
+        private int worldMarkerBoxCycles = 5;
+
+        private int worldMarkerMaxMarkers = 16;
+        private int worldMarkerMaxDistance = 128;
+
+        private boolean highlightAllOnSearch = false;
+        private boolean sourceColorCoding = true;
+
+        public boolean blockOutlineEnabled() { return blockOutlineEnabled; }
+        public int blockOutlineColor() { return parseColor(blockOutlineColor, 0xFFFFFFFF); }
+        public int blockOutlineCycles() { return clamp(blockOutlineCycles, 1, 20); }
+        public void setBlockOutlineEnabled(boolean enabled) { this.blockOutlineEnabled = enabled; }
+        public void setBlockOutlineColor(String color) { this.blockOutlineColor = color; }
+
+        public boolean guiSlotEnabled() { return guiSlotEnabled; }
+        public int guiSlotColor() { return parseColor(guiSlotColor, 0xFF0066AA); }
+        public boolean guiSlotPulse() { return guiSlotPulse; }
+        public int guiSlotDisplayTimeSeconds() { return clamp(guiSlotDisplayTimeSeconds, 1, 60); }
+        public void setGuiSlotDisplayTimeSeconds(int seconds) {
+            this.guiSlotDisplayTimeSeconds = clamp(seconds, 1, 60);
+        }
+        public void setGuiSlotPulse(boolean pulse) {
+            this.guiSlotPulse = pulse;
+        }
+        public void setGuiSlotEnabled(boolean enabled) { this.guiSlotEnabled = enabled; }
+        public void setGuiSlotColor(String color) { this.guiSlotColor = color; }
+
+        public boolean nestedBoxEnabled() { return nestedBoxEnabled; }
+        public int nestedBoxColor() { return parseColor(nestedBoxColor, 0xFF006688); }
+        public void setNestedBoxEnabled(boolean enabled) { this.nestedBoxEnabled = enabled; }
+        public void setNestedBoxColor(String color) { this.nestedBoxColor = color; }
+
+        public boolean worldMarkerBeamEnabled() { return worldMarkerBeamEnabled; }
+        public int worldMarkerBeamColor() { return parseColor(worldMarkerBeamColor, 0xFFCC8800); }
+        public boolean worldMarkerBeamThroughWalls() { return worldMarkerBeamThroughWalls; }
+        public void setWorldMarkerBeamEnabled(boolean enabled) { this.worldMarkerBeamEnabled = enabled; }
+        public void setWorldMarkerBeamColor(String color) { this.worldMarkerBeamColor = color; }
+        public void setWorldMarkerBeamThroughWalls(boolean throughWalls) { this.worldMarkerBeamThroughWalls = throughWalls; }
+
+        public boolean worldMarkerBoxEnabled() { return worldMarkerBoxEnabled; }
+        public int worldMarkerBoxColor() { return parseColor(worldMarkerBoxColor, 0xFFAAAAAA); }
+        public int worldMarkerBoxCycles() { return clamp(worldMarkerBoxCycles, 1, 20); }
+        public void setWorldMarkerBoxEnabled(boolean enabled) { this.worldMarkerBoxEnabled = enabled; }
+        public void setWorldMarkerBoxColor(String color) { this.worldMarkerBoxColor = color; }
+
+        public int worldMarkerMaxMarkers() { return clamp(worldMarkerMaxMarkers, 1, 256); }
+        public int worldMarkerMaxDistance() { return clamp(worldMarkerMaxDistance, 16, 2048); }
+
+        public boolean highlightAllOnSearch() { return highlightAllOnSearch; }
+        public boolean sourceColorCoding() { return sourceColorCoding; }
+
+        public int localSourceColor() { return parseColor("#FF55FF55", 0xFF55FF55); }
+        public int serverSourceColor() { return parseColor("#FF5555FF", 0xFF5555FF); }
+
+        private static int parseColor(String hex, int fallback) {
+            if (hex == null) return fallback;
+            String s = hex.trim();
+            if (s.startsWith("#")) s = s.substring(1);
+            try {
+                return (int) Long.parseLong(s, 16);
+            } catch (NumberFormatException ignored) {
+                return fallback;
+            }
+        }
+
+        private static int clamp(int value, int min, int max) {
+            return Math.max(min, Math.min(max, value));
+        }
+    }
+
+    public static final class AutoIndexConfig {
+        private boolean enabled = false;
+        private int radius = 32;
+        private String radiusUnit = "blocks";
+        private int containersPerTick = 4;
+        private int scanIntervalTicks = 20;
+        private int maxMillisPerTick = 2;
+        private int rescanTtlSeconds = 300;
+        private boolean onlyLoadedChunks = true;
+
+        public boolean enabled() { return enabled; }
+        public int radius() { return clamp(radius, 4, 256); }
+        public boolean radiusInBlocks() { return !"chunks".equalsIgnoreCase(radiusUnit); }
+        public int containersPerTick() { return clamp(containersPerTick, 1, 64); }
+        public int scanIntervalTicks() { return clamp(scanIntervalTicks, 1, 1200); }
+        public int maxMillisPerTick() { return clamp(maxMillisPerTick, 1, 50); }
+        public int rescanTtlSeconds() { return clamp(rescanTtlSeconds, 10, 3600); }
+        public boolean onlyLoadedChunks() { return onlyLoadedChunks; }
+
+        private static int clamp(int value, int min, int max) {
+            return Math.max(min, Math.min(value, max));
+        }
+    }
+
+    public static final class DataSourceConfig {
+        private String mode = "MERGED";
+        private boolean persistServerData = false;
+
+        public DataSourceMode mode() {
+            try {
+                return DataSourceMode.valueOf(mode);
+            } catch (Exception ignored) {
+                return DataSourceMode.MERGED;
+            }
+        }
+
+        public void setMode(DataSourceMode mode) {
+            this.mode = mode.name();
+        }
+
+        public boolean persistServerData() {
+            return persistServerData;
+        }
+
+        public void setPersistServerData(boolean persist) {
+            this.persistServerData = persist;
+        }
+
+        private void validate() {
+            try {
+                DataSourceMode.valueOf(mode);
+            } catch (Exception ignored) {
+                mode = "MERGED";
+            }
         }
     }
 }
