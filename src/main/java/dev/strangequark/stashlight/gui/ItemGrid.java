@@ -182,11 +182,9 @@ public class ItemGrid extends BaseComponent {
         // v1.3: click-operation hints
         lines.add(Component.empty());
         if (Config.get().remoteTake().enabled()) {
-            lines.add(Component.literal("LMB: Take | RMB: Highlight | Shift+LMB: Take stack")
-                    .withStyle(ChatFormatting.DARK_GRAY));
+            lines.add(Component.translatable("gui.stashlight.tooltip.takeHints").withStyle(ChatFormatting.DARK_GRAY));
         } else {
-            lines.add(Component.literal("LMB: Highlight | RMB: Highlight")
-                    .withStyle(ChatFormatting.DARK_GRAY));
+            lines.add(Component.translatable("gui.stashlight.tooltip.highlightHints").withStyle(ChatFormatting.DARK_GRAY));
         }
 
         graphics.setTooltipForNextFrame(

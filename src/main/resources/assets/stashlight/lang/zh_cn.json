@@ -48,5 +48,31 @@
   "screen.stashlight.label.searchContainers": "搜索容器",
   "screen.stashlight.highlightSettings": "高亮设置",
   "screen.stashlight.lookAtTarget": "看向目标",
-  "screen.stashlight.showSmallContainers": "显示小容器（少于 9 格）"
+  "screen.stashlight.showSmallContainers": "显示小容器（少于 9 格）",
+
+  "screen.stashlight.v1_3Settings": "v1.3 功能",
+
+  "gui.stashlight.label.proximityScan": "靠近自动扫描（modded）",
+  "gui.stashlight.label.proximityScanRadius": "扫描半径",
+  "gui.stashlight.label.containerThreshold": "容器阈值",
+  "gui.stashlight.label.scanInterval": "扫描间隔（秒）",
+
+  "gui.stashlight.label.vanillaFallback": "原版服扫描",
+  "gui.stashlight.label.loopInterval": "循环间隔（毫秒）",
+  "gui.stashlight.label.maxContainersPerLoop": "每轮最大容器数",
+  "gui.stashlight.label.blockFilter": "方块过滤器",
+  "gui.stashlight.label.scanComboKey": "扫描快捷键",
+  "gui.stashlight.label.scanComboMods": "扫描修饰键",
+
+  "gui.stashlight.label.liveSlotHighlight": "实时槽位高亮",
+  "gui.stashlight.label.inventoryBar": "背包栏",
+  "gui.stashlight.label.remoteTake": "远程取物",
+  "gui.stashlight.label.defaultQuantity": "默认数量",
+
+  "gui.stashlight.take.title": "拿取 %s",
+  "gui.stashlight.take.confirm": "拿取",
+  "gui.stashlight.take.cancel": "取消",
+
+  "gui.stashlight.tooltip.takeHints": "左键：拿取 | 右键：高亮 | Shift+左键：拿一组",
+  "gui.stashlight.tooltip.highlightHints": "左键：高亮 | 右键：高亮"
 }

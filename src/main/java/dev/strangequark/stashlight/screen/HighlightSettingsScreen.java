@@ -1,6 +1,11 @@
 package dev.strangequark.stashlight.screen;
 
 import dev.strangequark.stashlight.config.Config;
+import dev.strangequark.stashlight.config.Config.ProximityScanConfig;
+import dev.strangequark.stashlight.config.Config.VanillaFallbackConfig;
+import dev.strangequark.stashlight.config.Config.LiveSlotHighlightConfig;
+import dev.strangequark.stashlight.config.Config.SearchInventoryBarConfig;
+import dev.strangequark.stashlight.config.Config.RemoteTakeConfig;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
 import io.wispforest.owo.ui.component.Components;
 import io.wispforest.owo.ui.component.CheckboxComponent;
@@ -162,6 +167,35 @@ public final class HighlightSettingsScreen extends BaseOwoScreen<FlowLayout> {
                 }
         ));
 
+        // ── v1.3 Features ──────────────────────────────────────────────
+
+        content.child(sectionLabel("screen.stashlight.v1_3Settings"));
+
+        // 1. Proximity Scan
+        var psCfg = Config.get().proximityScan();
+        content.child(makeCheckbox("gui.stashlight.label.proximityScan",
+                psCfg.enabled(), v -> { psCfg.setEnabled(v); Config.save(); }));
+
+        // 2. Vanilla-fallback Scanner
+        var vfCfg = Config.get().vanillaFallback();
+        content.child(makeCheckbox("gui.stashlight.label.vanillaFallback",
+                vfCfg.enabled(), v -> { vfCfg.setEnabled(v); Config.save(); }));
+
+        // 3. Live Slot Highlight
+        var lshCfg = Config.get().liveSlotHighlight();
+        content.child(makeCheckbox("gui.stashlight.label.liveSlotHighlight",
+                lshCfg.enabled(), v -> { lshCfg.setEnabled(v); Config.save(); }));
+
+        // 4. Inventory Bar
+        var ibCfg = Config.get().searchInventoryBar();
+        content.child(makeCheckbox("gui.stashlight.label.inventoryBar",
+                ibCfg.enabled(), v -> { ibCfg.setEnabled(v); Config.save(); }));
+
+        // 5. Remote Take
+        var rtCfg = Config.get().remoteTake();
+        content.child(makeCheckbox("gui.stashlight.label.remoteTake",
+                rtCfg.enabled(), v -> { rtCfg.setEnabled(v); Config.save(); }));
+
         ScrollContainer<FlowLayout> scroll = Containers
                 .verticalScroll(Sizing.fill(100), Sizing.expand(100), content)
                 .scrollbarThiccness(SCROLL_WIDTH)
@@ -221,6 +255,28 @@ public final class HighlightSettingsScreen extends BaseOwoScreen<FlowLayout> {
         });
 
         row.child(checkbox).child(textBox).child(preview);
+        return row;
+    }
+
+    /**
+     * Create a simple enabled/disabled checkbox row.
+     */
+    private static FlowLayout makeCheckbox(String labelKey, boolean checked,
+                                           java.util.function.Consumer<Boolean> onChanged) {
+        FlowLayout row = (FlowLayout) Containers.horizontalFlow(Sizing.fill(100), Sizing.fixed(COMPONENT_HEIGHT))
+                .gap(GAP)
+                .alignment(HorizontalAlignment.LEFT, VerticalAlignment.CENTER);
+
+        CheckboxComponent checkbox = (CheckboxComponent) Components
+                .checkbox(Component.translatable(labelKey))
+                .checked(checked)
+                .onChanged(v -> {
+                    onChanged.accept(v);
+                    Config.save();
+                })
+                .sizing(Sizing.content(), Sizing.fixed(COMPONENT_HEIGHT));
+
+        row.child(checkbox);
         return row;
     }
 

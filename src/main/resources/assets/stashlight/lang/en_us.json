@@ -48,5 +48,31 @@
   "screen.stashlight.label.searchContainers": "Search Containers",
   "screen.stashlight.highlightSettings": "Highlight Settings",
   "screen.stashlight.lookAtTarget": "Look at target",
-  "screen.stashlight.showSmallContainers": "Show small containers (< 9 slots)"
+  "screen.stashlight.showSmallContainers": "Show small containers (< 9 slots)",
+
+  "screen.stashlight.v1_3Settings": "v1.3 Features",
+
+  "gui.stashlight.label.proximityScan": "Proximity Scan (modded)",
+  "gui.stashlight.label.proximityScanRadius": "Scan Radius",
+  "gui.stashlight.label.containerThreshold": "Container Threshold",
+  "gui.stashlight.label.scanInterval": "Interval (seconds)",
+
+  "gui.stashlight.label.vanillaFallback": "Vanilla-fallback Scanner",
+  "gui.stashlight.label.loopInterval": "Loop Interval (ms)",
+  "gui.stashlight.label.maxContainersPerLoop": "Max Containers / Loop",
+  "gui.stashlight.label.blockFilter": "Block Filter",
+  "gui.stashlight.label.scanComboKey": "Scan Key",
+  "gui.stashlight.label.scanComboMods": "Scan Modifiers",
+
+  "gui.stashlight.label.liveSlotHighlight": "Live Slot Highlight",
+  "gui.stashlight.label.inventoryBar": "Inventory Bar",
+  "gui.stashlight.label.remoteTake": "Remote Take",
+  "gui.stashlight.label.defaultQuantity": "Default Quantity",
+
+  "gui.stashlight.take.title": "Take %s",
+  "gui.stashlight.take.confirm": "Take",
+  "gui.stashlight.take.cancel": "Cancel",
+
+  "gui.stashlight.tooltip.takeHints": "LMB: Take | RMB: Highlight | Shift+LMB: Take stack",
+  "gui.stashlight.tooltip.highlightHints": "LMB: Highlight | RMB: Highlight"
 }
