@@ -9,6 +9,8 @@ import dev.strangequark.stashlight.repository.ContainerRepository;
 import dev.strangequark.stashlight.scan.AutoIndexer;
 import dev.strangequark.stashlight.scan.ProximityScanner;
 import dev.strangequark.stashlight.scan.VanillaScanner;
+import dev.strangequark.stashlight.scan.VanillaTaker;
+import dev.strangequark.stashlight.take.TakeClient;
 import dev.strangequark.stashlight.screen.SearchScreen;
 import dev.strangequark.stashlight.serializer.Serializer;
 import dev.strangequark.stashlight.util.Util;
@@ -73,12 +75,18 @@ public class Stashlight implements ClientModInitializer {
         return repository;
     }
 
+    public TakeClient getTakeClient() {
+        return takeClient;
+    }
+
     private Serializer serializer;
     private Serializer serverSerializer;
     private ContainerRepository repository;
     private AutoIndexer autoIndexer;
     private ProximityScanner proximityScanner;
     private VanillaScanner vanillaScanner;
+    private VanillaTaker vanillaTaker;
+    private TakeClient takeClient;
     private static KeyMapping searchKey;
     public static final KeyMapping.Category STASHLIGHT = KeyMapping.Category.register(ResourceLocation.fromNamespaceAndPath(MOD_ID, "stashlight"));
 
@@ -170,6 +178,11 @@ public class Stashlight implements ClientModInitializer {
             if (vanillaScanner != null) {
                 vanillaScanner.tick(client);
             }
+
+            // v1.3: vanilla-fallback taker
+            if (vanillaTaker != null) {
+                vanillaTaker.tick(client);
+            }
         });
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
@@ -182,6 +195,8 @@ public class Stashlight implements ClientModInitializer {
             autoIndexer = new AutoIndexer(repository);
             proximityScanner = new ProximityScanner();
             vanillaScanner = new VanillaScanner();
+            vanillaTaker = new VanillaTaker();
+            takeClient = new TakeClient();
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
@@ -254,12 +269,8 @@ public class Stashlight implements ClientModInitializer {
     }
 
     private void handleTakeItemResponse(TakeItemResponsePayload payload) {
-        // Stub — will be wired to TakeClient in Phase D.
-        int nonce = payload.nonce();
-        int result = payload.result();
-        int taken = payload.taken();
-        if (result != TakeResult.SUCCESS.ordinal()) {
-            Stashlight.LOGGER.warn("Take request {} failed: {} (taken={})", nonce, result, taken);
+        if (takeClient != null) {
+            takeClient.handleResponse(payload);
         }
     }
 

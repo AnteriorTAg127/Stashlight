@@ -5,6 +5,7 @@ import dev.strangequark.stashlight.net.*;
 import dev.strangequark.stashlight.server.ContainerSignatureStore;
 import dev.strangequark.stashlight.server.RateLimiter;
 import dev.strangequark.stashlight.server.ServerScanner;
+import dev.strangequark.stashlight.util.SignatureUtil;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -17,9 +18,14 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraft.world.Container;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,6 +46,7 @@ public class StashlightServer implements ModInitializer {
     private static final Logger LOGGER = LoggerFactory.getLogger("Stashlight");
 
     private final RateLimiter rateLimiter = new RateLimiter();
+    private final RateLimiter takeRateLimiter = new RateLimiter();
     private final AtomicInteger nonceGenerator = new AtomicInteger(0);
 
     // v2 state — join push + incremental response
@@ -64,6 +71,12 @@ public class StashlightServer implements ModInitializer {
 
         ServerPlayNetworking.registerGlobalReceiver(ClientReadyPayload.TYPE, (payload, context) -> {
                     context.server().execute(() -> handleClientReady(payload, context.player()));
+                }
+        );
+
+        // v3: take item
+        ServerPlayNetworking.registerGlobalReceiver(TakeItemRequestPayload.TYPE, (payload, context) -> {
+                    context.server().execute(() -> handleTakeItem(payload, context.player()));
                 }
         );
 
@@ -222,6 +235,82 @@ public class StashlightServer implements ModInitializer {
 
     private void sendError(ServerPlayer player, int nonce, String reason) {
         ServerPlayNetworking.send(player, new ScanErrorPayload(nonce, reason));
+    }
+
+    // ── v3: take item ──────────────────────────────────────────────────────
+
+    private void handleTakeItem(TakeItemRequestPayload p, ServerPlayer player) {
+        var cfg = ServerConfig.get();
+        int nonce = p.nonce();
+        ServerLevel level = (ServerLevel) player.level();
+
+        // 1. Enabled check
+        if (!cfg.take().enabled()) {
+            respondTake(player, nonce, TakeResult.DISABLED, 0);
+            return;
+        }
+
+        // 2. Rate limit
+        if (takeRateLimiter.allowRequest(player, level.getServer().getTickCount()) != RateLimiter.RateLimitResult.ALLOW) {
+            // Reuse RATE_LIMITED from TakeResult
+            respondTake(player, nonce, TakeResult.RATE_LIMITED, 0);
+            return;
+        }
+
+        // 3. Range check
+        if (!inRange(player, p.pos(), cfg.take().maxRadius())) {
+            respondTake(player, nonce, TakeResult.OUT_OF_RANGE, 0);
+            return;
+        }
+
+        // 4. Get container
+        BlockState state = level.getBlockState(p.pos());
+        Container container = ServerScanner.getContainer(level, p.pos(), state);
+        if (container == null) {
+            respondTake(player, nonce, TakeResult.NO_CONTAINER, 0);
+            return;
+        }
+
+        // 5. Item match
+        ItemStack slotStack = container.getItem(p.slot());
+        if (!ItemStack.isSameItemSameComponents(slotStack, p.target())) {
+            respondTake(player, nonce, TakeResult.ITEM_MISMATCH, 0);
+            return;
+        }
+
+        // 6. Take
+        int takeCount = Math.min(p.count(), slotStack.getCount());
+        ItemStack removed = container.removeItem(p.slot(), takeCount);
+
+        if (!player.getInventory().add(removed)) {
+            // Inventory full — put back
+            container.setItem(p.slot(), removed);
+            respondTake(player, nonce, TakeResult.INVENTORY_FULL, 0);
+            return;
+        }
+
+        // 7. Sync
+        container.setChanged();
+        player.getInventory().setChanged();
+        player.inventoryMenu.broadcastChanges();
+
+        // 8. Mark signature dirty for next scan push
+        if (signatureStore != null) {
+            signatureStore.put(player.getUUID(),
+                    level.dimension().location().toString(), p.pos(),
+                    SignatureUtil.computeSignature(container));
+        }
+
+        respondTake(player, nonce, TakeResult.SUCCESS, takeCount);
+    }
+
+    private void respondTake(ServerPlayer player, int nonce, TakeResult result, int taken) {
+        ServerPlayNetworking.send(player,
+                new TakeItemResponsePayload(nonce, result.ordinal(), taken));
+    }
+
+    private static boolean inRange(ServerPlayer player, BlockPos pos, int maxRadius) {
+        return player.position().distanceToSqr(Vec3.atCenterOf(pos)) <= (double) maxRadius * maxRadius;
     }
 
     private void onServerTick(MinecraftServer server) {

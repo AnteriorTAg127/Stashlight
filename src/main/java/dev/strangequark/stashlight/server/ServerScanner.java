@@ -124,7 +124,11 @@ public final class ServerScanner {
         );
     }
 
-    private static Container getContainer(ServerLevel level, BlockPos pos, BlockState state) {
+    /**
+     * Get the {@link Container} at the given position, or null if none exists.
+     * Made public for v1.3 take-item handling.
+     */
+    public static Container getContainer(ServerLevel level, BlockPos pos, BlockState state) {
         if (state.getBlock() instanceof ChestBlock chest) {
             var inv = ChestBlock.getContainer(chest, state, level, pos, true);
             if (inv instanceof Container c) return c;

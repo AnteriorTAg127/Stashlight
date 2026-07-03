@@ -6,6 +6,7 @@ import dev.strangequark.stashlight.model.EnchantEntry;
 import dev.strangequark.stashlight.model.IndexedItem;
 import dev.strangequark.stashlight.model.LocatePath;
 import dev.strangequark.stashlight.render.HighlightManager;
+import dev.strangequark.stashlight.take.TakeClient;
 import dev.strangequark.stashlight.util.Util;
 import io.wispforest.owo.ui.base.BaseComponent;
 import io.wispforest.owo.ui.core.OwoUIDrawContext;
@@ -235,17 +236,26 @@ public class ItemGrid extends BaseComponent {
         return true;
     }
 
-    // Stub: wired in Phase D
+    // ── v1.3: remote take ──────────────────────────────────────────────────
+
     private void startTake(DisplayItem item, int count) {
         var mc = Minecraft.getInstance();
         mc.setScreen(null);
-        // TODO: Phase D — delegate to TakeClient or VanillaTaker
+        var stashlight = dev.strangequark.stashlight.Stashlight.getInstance();
+        if (stashlight != null) {
+            stashlight.getTakeClient().startTake(item, count);
+        }
     }
 
-    // Stub: wired in Phase D
     private void openTakeDialog(DisplayItem item) {
-        // TODO: Phase D — show TakeQuantityDialog
-        startTake(item, 1); // default to 1 for now
+        // Show owo dialog over search screen
+        var mc = Minecraft.getInstance();
+        if (mc.screen instanceof dev.strangequark.stashlight.screen.SearchScreen searchScreen) {
+            mc.setScreen(new dev.strangequark.stashlight.gui.TakeQuantityDialog(searchScreen, item));
+        } else {
+            // Fallback: default 1
+            startTake(item, 1);
+        }
     }
 
     private static boolean hasShiftDown() {
