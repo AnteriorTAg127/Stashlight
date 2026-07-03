@@ -13,6 +13,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.Set;
 
 import dev.strangequark.stashlight.model.DataSourceMode;
+import dev.strangequark.stashlight.model.SlotStack;
 import dev.strangequark.stashlight.repository.ContainerRepository;
 import dev.strangequark.stashlight.screen.SearchScreen;
 
@@ -169,6 +171,12 @@ public final class VanillaTaker {
                 } else {
                     // Item not found in this container — skip
                     LOGGER.debug("Item not found in container {}, skipping", candidateIndex);
+                }
+                // Refresh this container's cached inventory before closing — the
+                // container is already open, so reading slots is free and keeps
+                // the repository in sync without an extra scan pass.
+                if (candidateIndex < candidates.size()) {
+                    refreshRepositoryContainer(client, candidates.get(candidateIndex));
                 }
                 closeContainer(client, SilentOpenManager.getExpectedContainerId());
                 SilentOpenManager.finish();
@@ -415,6 +423,35 @@ public final class VanillaTaker {
         }
     }
 
+
+    /**
+     * Read the currently-open container's slots and write them back into the
+     * repository. Called after taking items (the container is still open) so
+     * the cached inventory reflects the post-take state without an extra scan.
+     */
+    private void refreshRepositoryContainer(Minecraft client, BlockPos pos) {
+        if (repository == null || pos == null || client.level == null || client.player == null) return;
+        var menu = client.player.containerMenu;
+        if (menu == null) return;
+
+        String dim = Util.getDimensionName(client.level);
+        BlockPos canonical = Util.getCanonicalPos(client.level, pos);
+        BlockState blockState = client.level.getBlockState(canonical);
+        String name = blockState.getBlock().getName().getString();
+
+        List<SlotStack> slots = new ArrayList<>();
+        int containerSize = 0;
+        for (var slot : menu.slots) {
+            if (slot.container == client.player.getInventory()) continue;
+            containerSize++;
+            var stack = slot.getItem();
+            if (!stack.isEmpty()) {
+                slots.add(new SlotStack(slot.index, stack.copy()));
+            }
+        }
+        repository.remove(dim, canonical);
+        repository.update(dim, canonical, name, containerSize, slots);
+    }
 
     /**
      * Reopen the search screen after a vanilla-fallback take completes, when

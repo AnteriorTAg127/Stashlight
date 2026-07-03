@@ -30,6 +30,8 @@ public final class TakeClient {
 
     private int totalTaken = 0;
     private int totalWanted = 0;
+    private int expectedResponses = 0;
+    private int completedResponses = 0;
 
     /**
      * Initiate a take operation for the given item and quantity.
@@ -56,6 +58,8 @@ public final class TakeClient {
 
         totalTaken = 0;
         totalWanted = count;
+        expectedResponses = 0;
+        completedResponses = 0;
 
         for (IndexedItem source : item.sources()) {
             if (totalTaken >= count) break;
@@ -63,6 +67,7 @@ public final class TakeClient {
             // Take the full remaining amount from each source (up to what's available)
             int want = Math.min(count - totalTaken, source.stack().getCount());
             int nonce = nonceGen.getAndIncrement();
+            expectedResponses++;
 
             final int takenBefore = totalTaken;
             pending.put(nonce, response -> {
@@ -74,6 +79,14 @@ public final class TakeClient {
                             Component.translatable("gui.stashlight.message.takeFailed",
                                     TakeResult.values()[response.result()].name()),
                             true);
+                }
+                completedResponses++;
+                // All take responses received — trigger an incremental scan so the
+                // server pushes back the post-take container contents and the
+                // search screen refreshes (see Stashlight.handleContainerUpdate).
+                if (completedResponses >= expectedResponses && expectedResponses > 0) {
+                    var st = Stashlight.getInstance();
+                    if (st != null) st.requestServerScan();
                 }
             });
 
@@ -110,5 +123,7 @@ public final class TakeClient {
         pending.clear();
         totalTaken = 0;
         totalWanted = 0;
+        expectedResponses = 0;
+        completedResponses = 0;
     }
 }
