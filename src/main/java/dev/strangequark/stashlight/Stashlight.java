@@ -7,6 +7,8 @@ import dev.strangequark.stashlight.render.GuiSlotHighlighter;
 import dev.strangequark.stashlight.render.HighlightRenderer;
 import dev.strangequark.stashlight.repository.ContainerRepository;
 import dev.strangequark.stashlight.scan.AutoIndexer;
+import dev.strangequark.stashlight.scan.ProximityScanner;
+import dev.strangequark.stashlight.scan.VanillaScanner;
 import dev.strangequark.stashlight.screen.SearchScreen;
 import dev.strangequark.stashlight.serializer.Serializer;
 import dev.strangequark.stashlight.util.Util;
@@ -63,10 +65,20 @@ public class Stashlight implements ClientModInitializer {
         return INSTANCE;
     }
 
+    public static KeyMapping getSearchKey() {
+        return searchKey;
+    }
+
+    public ContainerRepository getRepository() {
+        return repository;
+    }
+
     private Serializer serializer;
     private Serializer serverSerializer;
     private ContainerRepository repository;
     private AutoIndexer autoIndexer;
+    private ProximityScanner proximityScanner;
+    private VanillaScanner vanillaScanner;
     private static KeyMapping searchKey;
     public static final KeyMapping.Category STASHLIGHT = KeyMapping.Category.register(ResourceLocation.fromNamespaceAndPath(MOD_ID, "stashlight"));
 
@@ -148,6 +160,16 @@ public class Stashlight implements ClientModInitializer {
             if (cfg.enabled() && autoIndexer != null && tickCounter % cfg.scanIntervalTicks() == 0) {
                 autoIndexer.tick(client);
             }
+
+            // v1.3: proximity scanner (modded mode)
+            if (proximityScanner != null) {
+                proximityScanner.tick(client);
+            }
+
+            // v1.3: vanilla-fallback scanner
+            if (vanillaScanner != null) {
+                vanillaScanner.tick(client);
+            }
         });
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
@@ -158,6 +180,8 @@ public class Stashlight implements ClientModInitializer {
                     : null;
             repository = new ContainerRepository(serializer, serverSerializer);
             autoIndexer = new AutoIndexer(repository);
+            proximityScanner = new ProximityScanner();
+            vanillaScanner = new VanillaScanner();
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
@@ -213,6 +237,9 @@ public class Stashlight implements ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(ScanErrorPayload.TYPE, (payload, context) ->
                 context.client().execute(() -> {
+                    if ("RATE_LIMITED".equals(payload.reason()) && proximityScanner != null) {
+                        proximityScanner.onRateLimited();
+                    }
                 })
         );
 

@@ -31,6 +31,8 @@ public final class Config {
     private HighlightConfig highlight = new HighlightConfig();
     private AutoIndexConfig autoIndex = new AutoIndexConfig();
     private DataSourceConfig dataSource = new DataSourceConfig();
+    private ProximityScanConfig proximityScan = new ProximityScanConfig();
+    private VanillaFallbackConfig vanillaFallback = new VanillaFallbackConfig();
 
     /* ---------------- runtime-only state ---------------- */
 
@@ -85,6 +87,16 @@ public final class Config {
         return dataSource;
     }
 
+    public ProximityScanConfig proximityScan() {
+        if (proximityScan == null) proximityScan = new ProximityScanConfig();
+        return proximityScan;
+    }
+
+    public VanillaFallbackConfig vanillaFallback() {
+        if (vanillaFallback == null) vanillaFallback = new VanillaFallbackConfig();
+        return vanillaFallback;
+    }
+
     public void setLookAtTarget(boolean value) {
         if (this.lookAtTarget == value) return;
         this.lookAtTarget = value;
@@ -128,6 +140,8 @@ public final class Config {
         if (this.highlight == null) this.highlight = new HighlightConfig();
         if (this.autoIndex == null) this.autoIndex = new AutoIndexConfig();
         if (this.dataSource == null) this.dataSource = new DataSourceConfig();
+        if (this.proximityScan == null) this.proximityScan = new ProximityScanConfig();
+        if (this.vanillaFallback == null) this.vanillaFallback = new VanillaFallbackConfig();
         this.dataSource.validate();
     }
 
@@ -281,6 +295,55 @@ public final class Config {
             } catch (Exception ignored) {
                 mode = "MERGED";
             }
+        }
+
+    }
+
+    public static final class ProximityScanConfig {
+        private boolean enabled = false;
+        private int radius = 6;
+        private int containerThreshold = 3;
+        private int scanIntervalSeconds = 3;
+
+        public boolean enabled() { return enabled; }
+        public int radius() { return clamp(radius, 4, 32); }
+        public int containerThreshold() { return clamp(containerThreshold, 1, 64); }
+        public int scanIntervalSeconds() { return clamp(scanIntervalSeconds, 1, 60); }
+
+        public void setEnabled(boolean v) { this.enabled = v; }
+        public void setRadius(int v) { this.radius = clamp(v, 4, 32); }
+        public void setContainerThreshold(int v) { this.containerThreshold = clamp(v, 1, 64); }
+        public void setScanIntervalSeconds(int v) { this.scanIntervalSeconds = clamp(v, 1, 60); }
+
+        private static int clamp(int value, int min, int max) {
+            return Math.max(min, Math.min(value, max));
+        }
+    }
+
+    public static final class VanillaFallbackConfig {
+        private boolean enabled = false;
+        private int loopIntervalMillis = 300;
+        private int maxContainersPerLoop = 32;
+        private String blockFilter = "chest,barrel,shulker_box";
+        private String scanComboKey = "NONE";
+        private String scanComboMods = "";
+
+        public boolean enabled() { return enabled; }
+        public int loopIntervalMillis() { return clamp(loopIntervalMillis, 100, 5000); }
+        public int maxContainersPerLoop() { return clamp(maxContainersPerLoop, 1, 256); }
+        public String blockFilter() { return blockFilter != null ? blockFilter : "chest,barrel,shulker_box"; }
+        public String scanComboKey() { return scanComboKey != null ? scanComboKey : "NONE"; }
+        public String scanComboMods() { return scanComboMods != null ? scanComboMods : ""; }
+
+        public void setEnabled(boolean v) { this.enabled = v; }
+        public void setLoopIntervalMillis(int v) { this.loopIntervalMillis = clamp(v, 100, 5000); }
+        public void setMaxContainersPerLoop(int v) { this.maxContainersPerLoop = clamp(v, 1, 256); }
+        public void setBlockFilter(String v) { this.blockFilter = v; }
+        public void setScanComboKey(String v) { this.scanComboKey = v; }
+        public void setScanComboMods(String v) { this.scanComboMods = v; }
+
+        private static int clamp(int value, int min, int max) {
+            return Math.max(min, Math.min(value, max));
         }
     }
 }
