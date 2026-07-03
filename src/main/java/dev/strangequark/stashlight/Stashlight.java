@@ -33,6 +33,8 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.InventoryMenu;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.EntityBlock;
@@ -408,6 +410,13 @@ public class Stashlight implements ClientModInitializer {
             return;
         }
 
+        // The player's own inventory menu (crafting grid, armor, offhand, backpack)
+        // is never a searchable block container — bail before it can be indexed.
+        if (handler instanceof InventoryMenu) {
+            lastOpened = null;
+            return;
+        }
+
         String dimension = Util.getDimensionName(client.level);
         Set<BlockPos> pair = Util.resolveContainerPositions(client.level, lastOpened);
         BlockPos canonicalPos = Util.getCanonicalPos(client.level, pair.iterator().next());
@@ -419,8 +428,24 @@ public class Stashlight implements ClientModInitializer {
             return;
         }
 
-        var stacks = handler.getItems();
-        int containerSize = stacks.size() - 36;
+        // Read only the real container slots directly from the menu, skipping any
+        // slot backed by the player's inventory (main, hotbar, armor, offhand).
+        // The flat handler.getItems() list plus a "size - 36" heuristic wrongly
+        // captured armor/crafting slots whenever the menu wasn't a plain chest.
+        var player = client.player;
+        List<SlotStack> slotStacks = new ArrayList<>();
+        int containerSize = 0;
+        for (Slot slot : handler.slots) {
+            if (player != null && slot.container == player.getInventory()) {
+                continue;
+            }
+            containerSize++;
+            ItemStack stack = slot.getItem();
+            if (stack != null && !stack.isEmpty()) {
+                slotStacks.add(new SlotStack(slot.index, stack.copy()));
+            }
+        }
+
         if (containerSize <= 0) {
             lastOpened = null;
             return;
@@ -430,15 +455,6 @@ public class Stashlight implements ClientModInitializer {
         repository.remove(dimension, canonicalPos);
         for (BlockPos p : pair) {
             repository.remove(dimension, p);
-        }
-
-        // Single authoritative write
-        List<SlotStack> slotStacks = new ArrayList<>();
-        for (int i = 0; i < containerSize; i++) {
-            ItemStack stack = stacks.get(i);
-            if (stack != null && !stack.isEmpty()) {
-                slotStacks.add(new SlotStack(i, stack.copy()));
-            }
         }
 
         repository.update(
