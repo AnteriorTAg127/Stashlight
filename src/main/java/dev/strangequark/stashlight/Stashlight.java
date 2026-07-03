@@ -19,6 +19,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.event.client.player.ClientPlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -31,6 +32,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.InventoryMenu;
@@ -40,6 +42,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.EntityHitResult;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
@@ -69,10 +72,13 @@ public class Stashlight implements ClientModInitializer {
 
     private int tickCounter = 0;
 
+    // Block position of a searchable container the player just used (right-clicked),
+    // pending the corresponding container screen opening. Set by onBlockUsed, consumed
+    // by onScreenInit. Cleared by any non-searchable block or entity interaction so a
+    // stale pending (e.g. a sneak-placement that didn't open a chest) can't leak onto
+    // the next unrelated menu (ender chest, anvil, horse inventory, etc.).
     @Nullable
-    private BlockPos lastOpened;
-    @Nullable
-    private BlockPos lastLookedAtContainer;
+    private BlockPos pendingOpenedContainer;
 
     // Server capability state (updated by handshake packet).
     private volatile boolean serverModPresent = false;
@@ -95,6 +101,7 @@ public class Stashlight implements ClientModInitializer {
         registerNetworkHandlers();
 
         UseBlockCallback.EVENT.register(this::onBlockUsed);
+        UseEntityCallback.EVENT.register(this::onEntityUsed);
         ClientPlayerBlockBreakEvents.AFTER.register(this::onBlockBreak);
         ScreenEvents.AFTER_INIT.register(this::onScreenInit);
         WorldRenderEvents.AFTER_ENTITIES.register(HighlightRenderer::render);
@@ -120,15 +127,6 @@ public class Stashlight implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.level == null || repository == null) return;
-
-            var hit = client.hitResult;
-            if (hit instanceof BlockHitResult blockHit) {
-                BlockPos pos = blockHit.getBlockPos();
-                BlockState state = client.level.getBlockState(pos);
-                if (Util.isValidSearchableContainer(state)) {
-                    lastLookedAtContainer = pos;
-                }
-            }
 
             tickCounter++;
 
@@ -336,36 +334,25 @@ public class Stashlight implements ClientModInitializer {
         return result;
     }
 
-    @Nullable
-    private BlockPos resolveCurrentContainerPos(Minecraft client) {
-        if (lastOpened != null) {
-            return Util.getCanonicalPos(client.level, lastOpened);
-        }
-
-        var hit = client.hitResult;
-        if (hit instanceof BlockHitResult blockHit) {
-            BlockPos pos = blockHit.getBlockPos();
-            BlockState state = client.level.getBlockState(pos);
-            if (Util.isValidSearchableContainer(state)) {
-                return Util.getCanonicalPos(client.level, pos);
-            }
-        }
-
-        if (lastLookedAtContainer != null) {
-            BlockState state = client.level.getBlockState(lastLookedAtContainer);
-            if (Util.isValidSearchableContainer(state)) {
-                return Util.getCanonicalPos(client.level, lastLookedAtContainer);
-            }
-        }
-        return null;
-    }
-
     private InteractionResult onBlockUsed(Player player, Level level, InteractionHand interactionHand, BlockHitResult blockHitResult) {
         BlockPos pos = blockHitResult.getBlockPos();
         BlockState state = level.getBlockState(pos);
+        // Track a searchable container the player actually opened; clear pending for
+        // any other block so a stale pending (e.g. a sneak-placement that didn't open
+        // a chest) can't leak onto the next unrelated menu.
         if (Util.isValidSearchableContainer(state)) {
-            lastOpened = pos;
+            pendingOpenedContainer = pos;
+        } else {
+            pendingOpenedContainer = null;
         }
+        return InteractionResult.PASS;
+    }
+
+    private InteractionResult onEntityUsed(Player player, Level level, InteractionHand interactionHand, Entity entity, EntityHitResult entityHitResult) {
+        // Interacting with an entity (horse/llama inventory, villager trade, chest
+        // minecart, etc.) is never a searchable block container — drop any stale
+        // block pending so it can't be written to whatever chest was last used.
+        pendingOpenedContainer = null;
         return InteractionResult.PASS;
     }
 
@@ -386,45 +373,56 @@ public class Stashlight implements ClientModInitializer {
             return;
         }
 
-        if (screen instanceof AbstractContainerScreen<?> handled) {
-            var handler = handled.getMenu();
-            // Serialize on close to ensure the database reflects the final state of the inventory.
-            ScreenEvents.remove(screen).register(closedScreen -> {
-                serializeContainer(client, handler);
-                GuiSlotHighlighter.clearCurrentContainerPos();
-            });
+        if (!(screen instanceof AbstractContainerScreen<?> handled)) {
+            return;
+        }
 
-            BlockPos containerPos = resolveCurrentContainerPos(client);
-            if (containerPos != null) {
-                lastOpened = containerPos;
-                GuiSlotHighlighter.setCurrentContainerPos(containerPos);
-            }
+        var handler = handled.getMenu();
 
+        // Only treat this screen as a searchable-container open if the player actually
+        // used one (onBlockUsed). This excludes ender chests, anvils, crafting tables,
+        // enchanting tables, beacons, the player's own inventory, horse/villager menus,
+        // etc. — none of which should be indexed, and several of which used to leak
+        // onto whatever chest the player happened to be facing.
+        final BlockPos containerPos = pendingOpenedContainer != null
+                ? Util.getCanonicalPos(client.level, pendingOpenedContainer)
+                : null;
+        pendingOpenedContainer = null;
+
+        if (containerPos != null) {
+            GuiSlotHighlighter.setCurrentContainerPos(containerPos);
             ScreenEvents.afterRender(screen).register((s, graphics, mouseX, mouseY, tickDelta) ->
                     GuiSlotHighlighter.render((AbstractContainerScreen<?>) s, graphics, tickDelta));
         }
+
+        // Serialize on close. containerPos is captured per-screen, so closing one chest
+        // right as another opens can't write the first menu's contents to the second block.
+        ScreenEvents.remove(screen).register(closedScreen -> {
+            if (containerPos != null) {
+                serializeContainer(client, handler, containerPos);
+            }
+            GuiSlotHighlighter.clearCurrentContainerPos();
+        });
     }
 
-    private void serializeContainer(Minecraft client, AbstractContainerMenu handler) {
-        if (client.level == null || repository == null || lastOpened == null) {
+    private void serializeContainer(Minecraft client, AbstractContainerMenu handler, BlockPos openedPos) {
+        if (client.level == null || repository == null || openedPos == null) {
             return;
         }
 
         // The player's own inventory menu (crafting grid, armor, offhand, backpack)
         // is never a searchable block container — bail before it can be indexed.
         if (handler instanceof InventoryMenu) {
-            lastOpened = null;
             return;
         }
 
         String dimension = Util.getDimensionName(client.level);
-        Set<BlockPos> pair = Util.resolveContainerPositions(client.level, lastOpened);
+        Set<BlockPos> pair = Util.resolveContainerPositions(client.level, openedPos);
         BlockPos canonicalPos = Util.getCanonicalPos(client.level, pair.iterator().next());
         BlockState blockstate = client.level.getBlockState(canonicalPos);
 
 
         if (!Util.isValidSearchableContainer(blockstate)) {
-            lastOpened = null;
             return;
         }
 
@@ -447,7 +445,6 @@ public class Stashlight implements ClientModInitializer {
         }
 
         if (containerSize <= 0) {
-            lastOpened = null;
             return;
         }
 
@@ -464,7 +461,5 @@ public class Stashlight implements ClientModInitializer {
                 containerSize,
                 slotStacks
         );
-
-        lastOpened = null;
     }
 }
