@@ -33,6 +33,9 @@ public final class Config {
     private DataSourceConfig dataSource = new DataSourceConfig();
     private ProximityScanConfig proximityScan = new ProximityScanConfig();
     private VanillaFallbackConfig vanillaFallback = new VanillaFallbackConfig();
+    private LiveSlotHighlightConfig liveSlotHighlight = new LiveSlotHighlightConfig();
+    private SearchInventoryBarConfig searchInventoryBar = new SearchInventoryBarConfig();
+    private RemoteTakeConfig remoteTake = new RemoteTakeConfig();
 
     /* ---------------- runtime-only state ---------------- */
 
@@ -97,6 +100,21 @@ public final class Config {
         return vanillaFallback;
     }
 
+    public LiveSlotHighlightConfig liveSlotHighlight() {
+        if (liveSlotHighlight == null) liveSlotHighlight = new LiveSlotHighlightConfig();
+        return liveSlotHighlight;
+    }
+
+    public SearchInventoryBarConfig searchInventoryBar() {
+        if (searchInventoryBar == null) searchInventoryBar = new SearchInventoryBarConfig();
+        return searchInventoryBar;
+    }
+
+    public RemoteTakeConfig remoteTake() {
+        if (remoteTake == null) remoteTake = new RemoteTakeConfig();
+        return remoteTake;
+    }
+
     public void setLookAtTarget(boolean value) {
         if (this.lookAtTarget == value) return;
         this.lookAtTarget = value;
@@ -142,6 +160,9 @@ public final class Config {
         if (this.dataSource == null) this.dataSource = new DataSourceConfig();
         if (this.proximityScan == null) this.proximityScan = new ProximityScanConfig();
         if (this.vanillaFallback == null) this.vanillaFallback = new VanillaFallbackConfig();
+        if (this.liveSlotHighlight == null) this.liveSlotHighlight = new LiveSlotHighlightConfig();
+        if (this.searchInventoryBar == null) this.searchInventoryBar = new SearchInventoryBarConfig();
+        if (this.remoteTake == null) this.remoteTake = new RemoteTakeConfig();
         this.dataSource.validate();
     }
 
@@ -341,6 +362,35 @@ public final class Config {
         public void setBlockFilter(String v) { this.blockFilter = v; }
         public void setScanComboKey(String v) { this.scanComboKey = v; }
         public void setScanComboMods(String v) { this.scanComboMods = v; }
+
+        private static int clamp(int value, int min, int max) {
+            return Math.max(min, Math.min(value, max));
+        }
+    }
+
+    public static final class LiveSlotHighlightConfig {
+        private boolean enabled = false;
+
+        public boolean enabled() { return enabled; }
+        public void setEnabled(boolean v) { this.enabled = v; }
+    }
+
+    public static final class SearchInventoryBarConfig {
+        private boolean enabled = false;
+
+        public boolean enabled() { return enabled; }
+        public void setEnabled(boolean v) { this.enabled = v; }
+    }
+
+    public static final class RemoteTakeConfig {
+        private boolean enabled = false;
+        private int defaultQuantity = 1;
+
+        public boolean enabled() { return enabled; }
+        public int defaultQuantity() { return clamp(defaultQuantity, 1, 64); }
+
+        public void setEnabled(boolean v) { this.enabled = v; }
+        public void setDefaultQuantity(int v) { this.defaultQuantity = clamp(v, 1, 64); }
 
         private static int clamp(int value, int min, int max) {
             return Math.max(min, Math.min(value, max));

@@ -3,6 +3,7 @@ package dev.strangequark.stashlight.screen;
 import dev.strangequark.stashlight.Stashlight;
 import dev.strangequark.stashlight.config.Config;
 import dev.strangequark.stashlight.gui.EnchantFilterPanel;
+import dev.strangequark.stashlight.gui.InventoryBar;
 import dev.strangequark.stashlight.gui.ItemGrid;
 import dev.strangequark.stashlight.logic.filter.*;
 import dev.strangequark.stashlight.logic.sort.SortManager;
@@ -305,7 +306,18 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
         FlowLayout contentArea = (FlowLayout) Containers.horizontalFlow(Sizing.fill(100), Sizing.expand(100)).gap(GAP);
         contentArea.child(enchantPanelWrapper).child(gridWrapper);
 
-        mainWindow.child(title).child(searchBar).child(contentArea).child(footer);
+        mainWindow.child(title).child(searchBar).child(contentArea);
+
+        // v1.3: inventory bar (configurable, default off)
+        if (Config.get().searchInventoryBar().enabled()) {
+            FlowLayout invBarWrapper = (FlowLayout) Containers.verticalFlow(Sizing.fill(100), Sizing.content())
+                    .surface(Surface.outline(GRID_BORDER))
+                    .padding(Insets.of(BORDER));
+            invBarWrapper.child(new InventoryBar());
+            mainWindow.child(invBarWrapper);
+        }
+
+        mainWindow.child(footer);
         rootComponent.child(mainWindow).alignment(HorizontalAlignment.CENTER, VerticalAlignment.CENTER);
 
         updateModeUi();

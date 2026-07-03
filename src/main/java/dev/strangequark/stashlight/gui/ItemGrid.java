@@ -178,6 +178,16 @@ public class ItemGrid extends BaseComponent {
             }
         }
 
+        // v1.3: click-operation hints
+        lines.add(Component.empty());
+        if (Config.get().remoteTake().enabled()) {
+            lines.add(Component.literal("LMB: Take | RMB: Highlight | Shift+LMB: Take stack")
+                    .withStyle(ChatFormatting.DARK_GRAY));
+        } else {
+            lines.add(Component.literal("LMB: Highlight | RMB: Highlight")
+                    .withStyle(ChatFormatting.DARK_GRAY));
+        }
+
         graphics.setTooltipForNextFrame(
                 mc.font, lines,
                 item.stack().getTooltipImage(),
@@ -188,8 +198,6 @@ public class ItemGrid extends BaseComponent {
 
     @Override
     public boolean onMouseDown(MouseButtonEvent click, boolean doubled) {
-        if (click.button() != 0) return super.onMouseDown(click, doubled);
-
         // click coords are relative to the component origin in owo
         int idx = slotIndexAt((int) (this.x + click.x()), (int) (this.y + click.y()));
         if (idx < 0 || idx >= items.size()) return true;
@@ -199,12 +207,45 @@ public class ItemGrid extends BaseComponent {
 
         DisplayItem item = items.get(idx);
         boolean shift = hasShiftDown();
-        boolean added = HighlightManager.tryHighlight(item, shift);
-        if (!added) return true;
 
-        if (Config.get().lookAtTarget() && !shift) lookAt(mc.player, item.pos());
-        if (!shift) mc.setScreen(null);
+        if (click.button() == 1) {
+            // Right-click → highlight (was left-click in v1.2)
+            boolean added = HighlightManager.tryHighlight(item, shift);
+            if (!added) return true;
+            if (Config.get().lookAtTarget() && !shift) lookAt(mc.player, item.pos());
+            if (!shift) mc.setScreen(null);
+        } else if (click.button() == 0) {
+            // Left-click
+            if (Config.get().remoteTake().enabled()) {
+                // Take mode
+                int qty = shift ? 64 : -1; // -1 = show dialog
+                if (qty > 0) {
+                    startTake(item, qty);
+                } else {
+                    openTakeDialog(item);
+                }
+            } else {
+                // Fallback: highlight (same as right-click)
+                boolean added = HighlightManager.tryHighlight(item, shift);
+                if (!added) return true;
+                if (Config.get().lookAtTarget() && !shift) lookAt(mc.player, item.pos());
+                if (!shift) mc.setScreen(null);
+            }
+        }
         return true;
+    }
+
+    // Stub: wired in Phase D
+    private void startTake(DisplayItem item, int count) {
+        var mc = Minecraft.getInstance();
+        mc.setScreen(null);
+        // TODO: Phase D — delegate to TakeClient or VanillaTaker
+    }
+
+    // Stub: wired in Phase D
+    private void openTakeDialog(DisplayItem item) {
+        // TODO: Phase D — show TakeQuantityDialog
+        startTake(item, 1); // default to 1 for now
     }
 
     private static boolean hasShiftDown() {

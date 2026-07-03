@@ -27,6 +27,7 @@ public class UIStyle {
 
     public static final int SLOT_BG = 0x55888888;
     public static final int SLOT_HOVER = 0x44FFFFFF;
+    public static final int SLOT_HIGHLIGHT_BG = 0x44FFFF00;
     public static final int SLOT_OUTLINE = 0xFFFFFFFF;
     public static final int COUNT_COLOR = 0xFFFFFFFF;
 }

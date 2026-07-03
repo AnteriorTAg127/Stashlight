@@ -46,7 +46,11 @@ public final class HighlightManager {
             clearByDimension(currentDim);
         }
 
-        highlights.add(new HighlightTarget(item.pos(), item.path(), item.source(), System.currentTimeMillis(), colorForSource(item.source())));
+        highlights.add(new HighlightTarget(
+                item.pos(), item.path(), item.source(),
+                System.currentTimeMillis(), colorForSource(item.source()),
+                item.stack().copy()
+        ));
         return true;
     }
 
@@ -69,11 +73,12 @@ public final class HighlightManager {
         }
 
         long now = System.currentTimeMillis();
-        Set<BlockPos> seen = new HashSet<>();
         int color = colorForSource(item.source());
         for (IndexedItem source : item.sources()) {
-            seen.add(source.pos());
-            highlights.add(new HighlightTarget(source.pos(), source.path(), source.source(), now, color));
+            highlights.add(new HighlightTarget(
+                    source.pos(), source.path(), source.source(), now, color,
+                    source.stack().copy()
+            ));
         }
         return true;
     }
@@ -93,7 +98,11 @@ public final class HighlightManager {
         int added = 0;
         for (IndexedItem item : items) {
             if (!currentDim.equals(item.dimension())) continue;
-            highlights.add(new HighlightTarget(item.pos(), item.path(), item.source(), now, colorForSource(item.source())));
+            highlights.add(new HighlightTarget(
+                    item.pos(), item.path(), item.source(), now,
+                    colorForSource(item.source()),
+                    item.stack().copy()
+            ));
             added++;
         }
         return added;
