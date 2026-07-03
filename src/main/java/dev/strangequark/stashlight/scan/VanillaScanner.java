@@ -265,7 +265,7 @@ public final class VanillaScanner {
                     BlockState state = level.getBlockState(pos);
                     if (Util.isValidSearchableContainer(state)) {
                         String blockId = state.getBlock().builtInRegistryHolder().key().location().getPath();
-                        if (allowedBlocks.contains(blockId)) {
+                        if (matchesAllowed(blockId, allowedBlocks)) {
                             BlockPos canonical = Util.getCanonicalPos(level, pos);
                             if (seen.add(canonical)) {
                                 candidates.add(canonical);
@@ -323,6 +323,21 @@ public final class VanillaScanner {
             return new HashSet<>(Arrays.asList("chest", "barrel", "shulker_box"));
         }
         return new HashSet<>(Arrays.asList(filter.split(",")));
+    }
+
+    /**
+     * Match a blockId against the allowed-token set. A token matches when it
+     * equals the blockId, or the blockId ends with {@code "_" + token} — so a
+     * single {@code shulker_box} token covers all 17 dyed variants
+     * (orange_shulker_box, white_shulker_box, ...), and {@code chest} also
+     * covers trapped_chest.
+     */
+    private static boolean matchesAllowed(String blockId, Set<String> allowed) {
+        if (allowed.contains(blockId)) return true;
+        for (String token : allowed) {
+            if (blockId.endsWith("_" + token)) return true;
+        }
+        return false;
     }
 
     private void transitionTo(State newState, int tickDelay) {

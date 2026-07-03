@@ -49,6 +49,9 @@
   "screen.stashlight.highlightSettings": "高亮设置",
   "screen.stashlight.lookAtTarget": "看向目标",
   "screen.stashlight.showSmallContainers": "显示小容器（少于 9 格）",
+  "gui.stashlight.checkbox.takeableReachable": "可隔空取出",
+  "gui.stashlight.checkbox.takeableReachable.tooltip": "仅显示当前模式取物范围内且已扫描的物品",
+  "gui.stashlight.label.takeableReachable": "可隔空取出",
 
   "screen.stashlight.v1_3Settings": "v1.3 功能",
 
@@ -80,6 +83,7 @@
   "gui.stashlight.label.inventoryBar": "背包栏",
   "gui.stashlight.label.remoteTake": "远程取物",
   "gui.stashlight.label.defaultQuantity": "默认数量",
+  "gui.stashlight.label.keepScreenOnTake": "取物时保持界面",
 
   "gui.stashlight.take.title": "拿取 %s",
   "gui.stashlight.take.confirm": "拿取",

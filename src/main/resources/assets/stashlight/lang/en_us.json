@@ -49,6 +49,9 @@
   "screen.stashlight.highlightSettings": "Highlight Settings",
   "screen.stashlight.lookAtTarget": "Look at target",
   "screen.stashlight.showSmallContainers": "Show small containers (< 9 slots)",
+  "gui.stashlight.checkbox.takeableReachable": "Takeable (in range)",
+  "gui.stashlight.checkbox.takeableReachable.tooltip": "Only show items within current mode's take range and already scanned",
+  "gui.stashlight.label.takeableReachable": "Takeable (in range)",
 
   "screen.stashlight.v1_3Settings": "v1.3 Features",
 
@@ -80,6 +83,7 @@
   "gui.stashlight.label.inventoryBar": "Inventory Bar",
   "gui.stashlight.label.remoteTake": "Remote Take",
   "gui.stashlight.label.defaultQuantity": "Default Quantity",
+  "gui.stashlight.label.keepScreenOnTake": "Keep screen on take",
 
   "gui.stashlight.take.title": "Take %s",
   "gui.stashlight.take.confirm": "Take",

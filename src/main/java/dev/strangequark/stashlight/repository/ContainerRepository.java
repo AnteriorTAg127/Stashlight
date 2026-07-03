@@ -349,6 +349,24 @@ public class ContainerRepository {
         }
     }
 
+    /**
+     * Find all container positions in the given dimension that contain an item
+     * matching the target stack (type + components). Returns deduplicated positions.
+     */
+    public Set<BlockPos> findContainerPositions(ItemStack target, String dimension, DataSourceMode mode) {
+        synchronized (lock()) {
+            Set<BlockPos> result = new LinkedHashSet<>();
+            List<IndexedItem> index = getSearchIndex(mode);
+            for (IndexedItem item : index) {
+                if (!item.dimension().equals(dimension)) continue;
+                if (ItemStack.isSameItemSameComponents(item.stack(), target)) {
+                    result.add(item.pos());
+                }
+            }
+            return result;
+        }
+    }
+
     public Map<ResourceLocation, List<IndexedItem>> getEnchantmentIndex(DataSourceMode mode) {
         synchronized (lock()) {
             Source wanted = mode == DataSourceMode.MERGED ? null

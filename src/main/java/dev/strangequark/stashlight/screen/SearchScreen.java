@@ -54,6 +54,7 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
     private ButtonComponent sourceButton;
     private ButtonComponent refreshButton;
     private LabelComponent syncTimeLabel;
+    private ReachableTakeFilter takeableReachableFilter;
 
     private SearchMode mode = SearchMode.ITEM;
     private DataSourceMode dataSourceMode;
@@ -89,6 +90,8 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
         filterManager.setCyclingStrategies(strategies);
         filterManager.addAlwaysOn(new SmallContainerFilter());
         filterManager.addAlwaysOn(new RadiusFilter());
+        takeableReachableFilter = new ReachableTakeFilter();
+        filterManager.addAlwaysOn(takeableReachableFilter);
     }
 
     @Override
@@ -261,11 +264,20 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
 
         CheckboxComponent showSmallCheckbox = (CheckboxComponent) Components
                 .checkbox(Component.translatable("screen.stashlight.showSmallContainers"))
-                .checked(config.showSmallContainers())
-                .onChanged(v -> {
+                .checked(config.showSmallContainers()).onChanged(v -> {
                     config.setShowSmallContainers(v);
                     refreshGrid(searchField.getValue());
                 })
+                .margins(Insets.top(BORDER));
+
+        CheckboxComponent takeableReachableCheckbox = (CheckboxComponent) Components
+                .checkbox(Component.translatable("gui.stashlight.checkbox.takeableReachable"))
+                .checked(false)
+                .onChanged(v -> {
+                    takeableReachableFilter.setEnabled(v);
+                    refreshGrid(searchField.getValue());
+                })
+                .tooltip(Component.translatable("gui.stashlight.checkbox.takeableReachable.tooltip"))
                 .margins(Insets.top(BORDER));
 
 
@@ -285,7 +297,7 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
             refreshGrid(searchField.getValue());
         });
 
-        footerRow1.child(distanceSlider).child(lookAtCheckbox).child(showSmallCheckbox);
+        footerRow1.child(distanceSlider).child(lookAtCheckbox).child(showSmallCheckbox).child(takeableReachableCheckbox);
 
         FlowLayout footerRow2 = (FlowLayout) Containers.horizontalFlow(Sizing.fill(100), Sizing.fixed(COMPONENT_HEIGHT))
                 .gap(GAP)

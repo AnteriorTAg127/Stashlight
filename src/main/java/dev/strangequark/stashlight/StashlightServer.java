@@ -290,9 +290,23 @@ public class StashlightServer implements ModInitializer {
         ItemStack removed = container.removeItem(p.slot(), takeCount);
 
         if (!player.getInventory().add(removed)) {
-            // Inventory full — put the item back in the container and report failure
-            container.setItem(p.slot(), removed);
-            respondTake(player, nonce, TakeResult.INVENTORY_FULL, 0);
+            // Inventory full
+            if (cfg.take().dropOnFullEnabled()) {
+                // Drop the items in front of the player instead of failing
+                player.drop(removed, false);
+                container.setChanged();
+                player.getInventory().setChanged();
+                player.inventoryMenu.broadcastChanges();
+                if (signatureStore != null) {
+                    signatureStore.put(player.getUUID(),
+                            Util.getDimensionName(level), p.pos(),
+                            SignatureUtil.computeSignature(container));
+                }
+                respondTake(player, nonce, TakeResult.SUCCESS, takeCount);
+            } else {
+                container.setItem(p.slot(), removed);
+                respondTake(player, nonce, TakeResult.INVENTORY_FULL, 0);
+            }
             return;
         }
 

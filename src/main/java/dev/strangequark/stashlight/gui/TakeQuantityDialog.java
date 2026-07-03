@@ -152,9 +152,17 @@ public final class TakeQuantityDialog extends BaseOwoScreen<FlowLayout> {
         int qty = Math.max(1, Math.min(quantity, maxQty));
 
         Minecraft mc = Minecraft.getInstance();
-        mc.setScreen(null);
-
         var stashlight = dev.strangequark.stashlight.Stashlight.getInstance();
+        boolean keepScreen = Config.get().remoteTake().keepScreenOnTake();
+        boolean modded = stashlight != null && stashlight.isModdedTakeAvailable();
+        // Keep search screen visible for modded take; vanilla-fallback closes
+        // (its state machine reopens the search screen on completion).
+        if (keepScreen && modded) {
+            mc.setScreen(parent);
+        } else {
+            mc.setScreen(null);
+        }
+
         if (stashlight != null) {
             stashlight.getTakeClient().startTake(target, qty);
         }

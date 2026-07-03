@@ -48,8 +48,11 @@ public final class TakeClient {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
-        // Close any open screen (required for take flow)
-        mc.setScreen(null);
+        // Close any open screen unless the user wants to keep the search UI.
+        // modded take is pure network packets, so keeping the screen is safe.
+        if (!Config.get().remoteTake().keepScreenOnTake()) {
+            mc.setScreen(null);
+        }
 
         totalTaken = 0;
         totalWanted = count;

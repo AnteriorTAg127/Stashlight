@@ -25,8 +25,8 @@ import java.util.List;
 import java.util.Set;
 
 import dev.strangequark.stashlight.model.DataSourceMode;
-import dev.strangequark.stashlight.model.IndexedItem;
 import dev.strangequark.stashlight.repository.ContainerRepository;
+import dev.strangequark.stashlight.screen.SearchScreen;
 
 /**
  * Vanilla-fallback taker. When the server has no modded take capability,
@@ -50,12 +50,12 @@ public final class VanillaTaker {
     private List<BlockPos> candidates;
     private int candidateIndex;
     private ItemStack targetStack;
-    private StackKey targetKey;
     private int remaining;
     private int totalWanted;
     private int takenSoFar;
     private int tickCounter;
     private ContainerRepository repository;
+    private int restorePendingTicks = 0;
 
     public VanillaTaker() {
         INSTANCE = this;
@@ -83,7 +83,6 @@ public final class VanillaTaker {
         mc.setScreen(null);
 
         targetStack = item.stack();
-        targetKey = new StackKey(targetStack);
         totalWanted = count;
         remaining = count;
         takenSoFar = 0;
@@ -97,7 +96,18 @@ public final class VanillaTaker {
      * Called every client tick. Drives the non-blocking state machine.
      */
     public void tick(Minecraft client) {
-        if (state == State.IDLE) return;
+        if (state == State.IDLE) {
+            // Deferred search-screen restore: wait a few ticks after the take
+            // finishes so the server's async ContainerClose packet (which would
+            // setScreen(null)) has been processed before we reopen SearchScreen.
+            if (restorePendingTicks > 0) {
+                restorePendingTicks--;
+                if (restorePendingTicks == 0) {
+                    restoreSearchScreen();
+                }
+            }
+            return;
+        }
 
         var cfg = Config.get().vanillaFallback();
         tickCounter++;
@@ -186,6 +196,7 @@ public final class VanillaTaker {
                 }
                 LOGGER.info("VanillaTaker done: {} taken of {} wanted", takenSoFar, totalWanted);
                 state = State.IDLE;
+                restorePendingTicks = 5;
             }
         }
     }
@@ -195,83 +206,147 @@ public final class VanillaTaker {
         if (player == null) return 0;
 
         var menu = player.containerMenu;
-        int taken = 0;
+        var slots = menu.slots;
+        boolean dropOnFull = Config.get().remoteTake().dropOnFullEnabled();
+        // Measure actual take by inventory delta, so the reported count stays
+        // correct even when shift-click transfers partially or the server
+        // rejects a click. Decouples counting from click-success assumptions.
+        int before = countInInventory(player, target);
+        int dropped = 0;
 
-        for (var slot : menu.slots) {
-            if (taken >= maxCount) break;
+        for (int i = 0; i < slots.size(); i++) {
+            var slot = slots.get(i);
             if (slot.container == player.getInventory()) continue;
 
             ItemStack slotStack = slot.getItem();
             if (slotStack.isEmpty()) continue;
             if (!ItemStack.isSameItemSameComponents(slotStack, target)) continue;
 
+            int inInv = countInInventory(player, target) - before;
+            int stillNeed = maxCount - inInv - dropped;
+            if (stillNeed <= 0) break;
             int have = slotStack.getCount();
-            int want = maxCount - taken;
 
-            if (want >= have) {
+            if (stillNeed >= have) {
                 // Take entire stack via shift-click
+                int invBefore = countInInventory(player, target);
                 client.gameMode.handleInventoryMouseClick(
-                        menu.containerId, slot.index, 0, ClickType.QUICK_MOVE, player);
-                taken += have;
+                        menu.containerId, i, 0, ClickType.QUICK_MOVE, player);
+                int transferred = countInInventory(player, target) - invBefore;
+                int remain = have - transferred;
+                if (remain > 0 && dropOnFull) {
+                    int needDrop = stillNeed - transferred;
+                    int toDrop = Math.min(remain, needDrop);
+                    if (toDrop > 0) {
+                        dropFromSlot(client, menu.containerId, i, toDrop, remain);
+                        dropped += toDrop;
+                    }
+                }
             } else {
                 // Partial stack: cursor-split
                 // 1. Pick up entire stack
                 client.gameMode.handleInventoryMouseClick(
-                        menu.containerId, slot.index, 0, ClickType.PICKUP, player);
-                // 2. Click `want` times into empty inventory slots using right-click (places 1 each)
+                        menu.containerId, i, 0, ClickType.PICKUP, player);
+                // 2. Right-click `stillNeed` times into empty main-inventory slots (places 1 each)
                 int placed = 0;
-                for (var invSlot : menu.slots) {
-                    if (placed >= want) break;
+                for (int j = 0; j < slots.size() && placed < stillNeed; j++) {
+                    var invSlot = slots.get(j);
                     if (invSlot.container != player.getInventory()) continue;
-                    // Only target main inventory slots (0..35: hotbar + main),
+                    // Only target main inventory + hotbar (Inventory index 0..35),
                     // excluding armor (36-39), offhand (40), and crafting slots.
                     if (invSlot.index >= 36) continue;
                     if (!invSlot.getItem().isEmpty()) continue;
                     client.gameMode.handleInventoryMouseClick(
-                            menu.containerId, invSlot.index, 1, ClickType.PICKUP, player);
+                            menu.containerId, j, 1, ClickType.PICKUP, player);
                     placed++;
                 }
                 // 3. Put the remainder back
                 client.gameMode.handleInventoryMouseClick(
-                        menu.containerId, slot.index, 0, ClickType.PICKUP, player);
-                taken += want;
+                        menu.containerId, i, 0, ClickType.PICKUP, player);
+                // 4. If inventory was full and drop is enabled, drop the unplaced portion
+                if (placed < stillNeed && dropOnFull) {
+                    int toDrop = stillNeed - placed;
+                    dropFromSlot(client, menu.containerId, i, toDrop, have - placed);
+                    dropped += toDrop;
+                }
             }
         }
 
-        return taken;
+        int after = countInInventory(player, target);
+        return Math.max(0, after - before) + dropped;
+    }
+
+    /**
+     * Drop {@code toDrop} items from container slot {@code slotId} onto the ground
+     * in front of the player. {@code remainInSlot} is the item count currently in
+     * the slot (used to decide between THROW-all and THROW-one loops).
+     */
+    private static void dropFromSlot(Minecraft client, int containerId, int slotId, int toDrop, int remainInSlot) {
+        var player = client.player;
+        if (player == null) return;
+        if (toDrop <= 0 || remainInSlot <= 0) return;
+        if (toDrop >= remainInSlot) {
+            // THROW button=1 drops the whole stack
+            client.gameMode.handleInventoryMouseClick(
+                    containerId, slotId, 1, ClickType.THROW, player);
+        } else {
+            // THROW button=0 drops 1 item; repeat for the needed count
+            for (int k = 0; k < toDrop; k++) {
+                client.gameMode.handleInventoryMouseClick(
+                        containerId, slotId, 0, ClickType.THROW, player);
+            }
+        }
+    }
+
+    /**
+     * Count how many of {@code target} (matching item + components) the player
+     * currently holds in main inventory + hotbar (slots 0..35). Used to measure
+     * the actual take delta around click operations.
+     */
+    private static int countInInventory(LocalPlayer player, ItemStack target) {
+        int count = 0;
+        var inv = player.getInventory();
+        for (int i = 0; i < 36; i++) {
+            var stack = inv.getItem(i);
+            if (ItemStack.isSameItemSameComponents(stack, target)) {
+                count += stack.getCount();
+            }
+        }
+        return count;
     }
 
     private List<BlockPos> buildReachableContainers(Minecraft client) {
         if (client.level == null || client.player == null) return List.of();
 
-        // Step 1: Collect indexed positions that have the target item
+        String currentDim = Util.getDimensionName(client.level);
+        double reachSq = 4.5 * 4.5;
+        BlockPos center = client.player.blockPosition();
+        var cfg = Config.get().vanillaFallback();
+
+        // Step 1: Collect indexed positions that have the target item (deduplicated to block-level)
         Set<BlockPos> indexedPositions = new LinkedHashSet<>();
-        if (repository != null && targetStack != null && targetKey != null) {
-            String currentDim = Util.getDimensionName(client.level);
-            List<IndexedItem> searchIndex = repository.getSearchIndex(DataSourceMode.MERGED);
-            for (IndexedItem item : searchIndex) {
-                if (!item.dimension().equals(currentDim)) continue;
-                if (targetKey.equals(new StackKey(item.stack()))) {
-                    indexedPositions.add(item.pos());
-                }
+        if (repository != null && targetStack != null) {
+            indexedPositions = repository.findContainerPositions(targetStack, currentDim, DataSourceMode.MERGED);
+        }
+
+        // Step 2: Filter indexed positions to reachable range
+        List<BlockPos> result = new ArrayList<>();
+        Set<BlockPos> seen = new HashSet<>();
+        for (BlockPos pos : indexedPositions) {
+            if (pos.distSqr(center) <= reachSq) {
+                result.add(pos);
+                seen.add(pos);
             }
         }
 
-        // Step 2: Start with indexed positions (tried first)
-        List<BlockPos> result = new ArrayList<>(indexedPositions);
-        Set<BlockPos> seen = new HashSet<>(indexedPositions);
-
         // If only indexed containers are wanted, skip brute-force scan
-        if (Config.get().vanillaFallback().takeOnlyIndexed()) {
+        if (cfg.takeOnlyIndexed()) {
             return result;
         }
 
         // Step 3: Brute-force scan remaining containers not in the index
-        BlockPos center = client.player.blockPosition();
-        double reachSq = 4.5 * 4.5;
         int radius = 5;
-
-        int maxScanSlots = Config.get().vanillaFallback().maxContainersPerLoop() - result.size();
+        int maxScanSlots = cfg.maxContainersPerLoop() - result.size();
         if (maxScanSlots > 0) {
             for (int dx = -radius; dx <= radius && result.size() < maxScanSlots; dx++) {
                 for (int dz = -radius; dz <= radius && result.size() < maxScanSlots; dz++) {
@@ -333,22 +408,25 @@ public final class VanillaTaker {
         if (menuId >= 0) closeContainer(Minecraft.getInstance(), menuId);
         SilentOpenManager.finish();
         state = State.IDLE;
+        restorePendingTicks = 5;
         if (Minecraft.getInstance().player != null) {
             Minecraft.getInstance().player.displayClientMessage(
                     Component.translatable("gui.stashlight.message.takeStop", reason), true);
         }
     }
 
+
     /**
-     * Simple stack-key for matching item type + components.
+     * Reopen the search screen after a vanilla-fallback take completes, when
+     * {@code keepScreenOnTake} is enabled. Called from the tick loop after the
+     * deferred-restore countdown reaches zero.
      */
-    private record StackKey(ItemStack stack) {
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (!(o instanceof StackKey k)) return false;
-            return ItemStack.isSameItemSameComponents(stack, k.stack);
-        }
+    private void restoreSearchScreen() {
+        if (!Config.get().remoteTake().keepScreenOnTake()) return;
+        if (repository == null) return;
+        var mc = Minecraft.getInstance();
+        if (mc.player == null) return;
+        mc.setScreen(new SearchScreen(repository));
     }
 
     public boolean isRunning() {

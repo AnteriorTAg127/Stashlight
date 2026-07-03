@@ -240,8 +240,14 @@ public class ItemGrid extends BaseComponent {
 
     private void startTake(DisplayItem item, int count) {
         var mc = Minecraft.getInstance();
-        mc.setScreen(null);
         var stashlight = dev.strangequark.stashlight.Stashlight.getInstance();
+        boolean keepScreen = Config.get().remoteTake().keepScreenOnTake();
+        boolean modded = stashlight != null && stashlight.isModdedTakeAvailable();
+        // Only close when modded take actually keeps the screen; vanilla-fallback
+        // always closes here and reopens the search screen when it finishes.
+        if (!(keepScreen && modded)) {
+            mc.setScreen(null);
+        }
         if (stashlight != null) {
             stashlight.getTakeClient().startTake(item, count);
         }

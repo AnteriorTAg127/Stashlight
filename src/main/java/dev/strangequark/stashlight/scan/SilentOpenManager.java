@@ -46,6 +46,8 @@ public final class SilentOpenManager {
     @Nullable
     private static Consumer<List<SlotStack>> callback = null;
 
+    private static int lastContainerId = -1;
+
     // ── public API ─────────────────────────────────────────────────────────
 
     /**
@@ -69,6 +71,7 @@ public final class SilentOpenManager {
         expectedContainerId = -1;
         callback = onResult;
         deadlineMs = System.currentTimeMillis() + 3000L; // 3-second timeout
+        lastContainerId = -1;
     }
 
     /**
@@ -84,17 +87,25 @@ public final class SilentOpenManager {
         var menu = mc.player.containerMenu;
         if (menu == null) return false;
         expectedContainerId = menu.containerId;
-        LOGGER.debug("isContentReady: containerId={} slots={}", expectedContainerId, menu.slots.size());
+        LOGGER.debug("isContentReady: containerId={} lastId={} slots={}", expectedContainerId, lastContainerId, menu.slots.size());
+
+        // Count container slots (non-player-inventory)
+        int containerSlotCount = 0;
         for (var slot : menu.slots) {
-            if (slot.container == mc.player.getInventory()) {
-                LOGGER.trace("  skip player inv slot {}", slot.index);
-                continue;
-            }
-            if (!slot.getItem().isEmpty()) {
-                LOGGER.debug("  non-empty container slot {}: {}", slot.index, slot.getItem());
-                return true;
+            if (slot.container != mc.player.getInventory()) {
+                containerSlotCount++;
             }
         }
+
+        // Return ready once the container menu has been established (new containerId)
+        // regardless of whether any slot has items — this avoids 2-second timeouts
+        // on empty containers.
+        if (menu.containerId > 0 && menu.containerId != lastContainerId && containerSlotCount > 0) {
+            lastContainerId = menu.containerId;
+            LOGGER.debug("  container menu ready ({} container slots)", containerSlotCount);
+            return true;
+        }
+
         LOGGER.debug("  no container content yet");
         return false;
     }
@@ -133,6 +144,7 @@ public final class SilentOpenManager {
         expectedContainerId = -1;
         callback = null;
         deadlineMs = 0L;
+        lastContainerId = -1;
     }
 
     /**
