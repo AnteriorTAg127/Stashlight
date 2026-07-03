@@ -303,21 +303,28 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
         footer.child(footerRow1).child(footerRow2);
 
         // --- ASSEMBLE ---
-        FlowLayout contentArea = (FlowLayout) Containers.horizontalFlow(Sizing.fill(100), Sizing.expand(100)).gap(GAP);
-        contentArea.child(enchantPanelWrapper).child(gridWrapper);
+        // Right column: scrollable grid on top, inventory bar below
+        FlowLayout rightColumn = (FlowLayout) Containers.verticalFlow(Sizing.fill(100), Sizing.fill(100))
+                .gap(GAP);
 
-        mainWindow.child(title).child(searchBar).child(contentArea);
+        // Grid wrapper (top right)
+        rightColumn.child(gridWrapper);
 
-        // v1.3: inventory bar (configurable, default off)
+        // Inventory bar (bottom right center, v1.3)
         if (Config.get().searchInventoryBar().enabled()) {
             FlowLayout invBarWrapper = (FlowLayout) Containers.verticalFlow(Sizing.fill(100), Sizing.content())
+                    .horizontalAlignment(HorizontalAlignment.CENTER)
                     .surface(Surface.outline(GRID_BORDER))
                     .padding(Insets.of(BORDER));
             invBarWrapper.child(new InventoryBar());
-            mainWindow.child(invBarWrapper);
+            rightColumn.child(invBarWrapper);
         }
 
-        mainWindow.child(footer);
+        // Content area: enchant panel on left, right column on right
+        FlowLayout contentArea = (FlowLayout) Containers.horizontalFlow(Sizing.fill(100), Sizing.expand(100)).gap(GAP);
+        contentArea.child(enchantPanelWrapper).child(rightColumn);
+
+        mainWindow.child(title).child(searchBar).child(contentArea).child(footer);
         rootComponent.child(mainWindow).alignment(HorizontalAlignment.CENTER, VerticalAlignment.CENTER);
 
         updateModeUi();

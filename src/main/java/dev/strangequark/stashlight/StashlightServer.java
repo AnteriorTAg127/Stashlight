@@ -283,9 +283,9 @@ public class StashlightServer implements ModInitializer {
         ItemStack removed = container.removeItem(p.slot(), takeCount);
 
         if (!player.getInventory().add(removed)) {
-            // Inventory full — put back
-            container.setItem(p.slot(), removed);
-            respondTake(player, nonce, TakeResult.INVENTORY_FULL, 0);
+            // Inventory full — drop at player's feet instead of failing
+            player.drop(removed, false);
+            respondTake(player, nonce, TakeResult.SUCCESS, takeCount);
             return;
         }
 

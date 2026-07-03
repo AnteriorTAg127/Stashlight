@@ -14,6 +14,11 @@ loom {
     accessWidenerPath = file("src/main/resources/stashlight.accesswidener")
 
     runs {
+        client {
+            client()
+            programArgs("--username", "AnteriorTag12")
+            runDir "run"
+        }
         server {
             server()
             runDir "run/server"

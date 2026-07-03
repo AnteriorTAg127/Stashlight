@@ -122,7 +122,8 @@ public class Stashlight implements ClientModInitializer {
     public void onInitializeClient() {
         INSTANCE = this;
         Init.init();
-        registerPayloads();
+        // Payload types are registered by StashlightServer (ModInitializer).
+        // Client only registers network handlers (receivers).
         registerNetworkHandlers();
 
         UseBlockCallback.EVENT.register(this::onBlockUsed);

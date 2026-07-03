@@ -171,30 +171,43 @@ public final class HighlightSettingsScreen extends BaseOwoScreen<FlowLayout> {
 
         content.child(sectionLabel("screen.stashlight.v1_3Settings"));
 
-        // 1. Proximity Scan
-        var psCfg = Config.get().proximityScan();
+        // 1. Proximity Scan (modded)
+        var ps = Config.get().proximityScan();
         content.child(makeCheckbox("gui.stashlight.label.proximityScan",
-                psCfg.enabled(), v -> { psCfg.setEnabled(v); Config.save(); }));
+                ps.enabled(), v -> { ps.setEnabled(v); Config.save(); }));
+        content.child(makeDiscreteSlider("gui.stashlight.label.proximityScanRadius",
+                ps.radius(), 4, 32, v -> { ps.setRadius(v); Config.save(); }));
+        content.child(makeDiscreteSlider("gui.stashlight.label.containerThreshold",
+                ps.containerThreshold(), 1, 64, v -> { ps.setContainerThreshold(v); Config.save(); }));
+        content.child(makeDiscreteSlider("gui.stashlight.label.scanInterval",
+                ps.scanIntervalSeconds(), 1, 60, v -> { ps.setScanIntervalSeconds(v); Config.save(); }));
 
         // 2. Vanilla-fallback Scanner
-        var vfCfg = Config.get().vanillaFallback();
+        var vf = Config.get().vanillaFallback();
         content.child(makeCheckbox("gui.stashlight.label.vanillaFallback",
-                vfCfg.enabled(), v -> { vfCfg.setEnabled(v); Config.save(); }));
+                vf.enabled(), v -> { vf.setEnabled(v); Config.save(); }));
+        content.child(makeDiscreteSlider("gui.stashlight.label.loopInterval",
+                vf.loopIntervalMillis(), 100, 5000, 100,
+                v -> { vf.setLoopIntervalMillis(v); Config.save(); }));
+        content.child(makeDiscreteSlider("gui.stashlight.label.maxContainersPerLoop",
+                vf.maxContainersPerLoop(), 1, 256, v -> { vf.setMaxContainersPerLoop(v); Config.save(); }));
 
         // 3. Live Slot Highlight
-        var lshCfg = Config.get().liveSlotHighlight();
         content.child(makeCheckbox("gui.stashlight.label.liveSlotHighlight",
-                lshCfg.enabled(), v -> { lshCfg.setEnabled(v); Config.save(); }));
+                Config.get().liveSlotHighlight().enabled(),
+                v -> { Config.get().liveSlotHighlight().setEnabled(v); Config.save(); }));
 
         // 4. Inventory Bar
-        var ibCfg = Config.get().searchInventoryBar();
         content.child(makeCheckbox("gui.stashlight.label.inventoryBar",
-                ibCfg.enabled(), v -> { ibCfg.setEnabled(v); Config.save(); }));
+                Config.get().searchInventoryBar().enabled(),
+                v -> { Config.get().searchInventoryBar().setEnabled(v); Config.save(); }));
 
         // 5. Remote Take
-        var rtCfg = Config.get().remoteTake();
+        var rt = Config.get().remoteTake();
         content.child(makeCheckbox("gui.stashlight.label.remoteTake",
-                rtCfg.enabled(), v -> { rtCfg.setEnabled(v); Config.save(); }));
+                rt.enabled(), v -> { rt.setEnabled(v); Config.save(); }));
+        content.child(makeDiscreteSlider("gui.stashlight.label.defaultQuantity",
+                rt.defaultQuantity(), 1, 64, v -> { rt.setDefaultQuantity(v); Config.save(); }));
 
         ScrollContainer<FlowLayout> scroll = Containers
                 .verticalScroll(Sizing.fill(100), Sizing.expand(100), content)
@@ -277,6 +290,58 @@ public final class HighlightSettingsScreen extends BaseOwoScreen<FlowLayout> {
                 .sizing(Sizing.content(), Sizing.fixed(COMPONENT_HEIGHT));
 
         row.child(checkbox);
+        return row;
+    }
+
+    /**
+     * Create a labelled discrete slider row (step=1).
+     */
+    private static FlowLayout makeDiscreteSlider(String labelKey, int value,
+                                                  int min, int max,
+                                                  java.util.function.Consumer<Integer> onChanged) {
+        FlowLayout row = (FlowLayout) Containers.horizontalFlow(Sizing.fill(100), Sizing.fixed(COMPONENT_HEIGHT))
+                .gap(GAP)
+                .alignment(HorizontalAlignment.LEFT, VerticalAlignment.CENTER);
+
+        row.child(Components.label(Component.translatable(labelKey)).shadow(true));
+
+        int steps = max - min;
+        DiscreteSliderComponent slider = Components.discreteSlider(Sizing.fixed(SLIDER_WIDTH), 0, steps);
+        slider.snap(true).decimalPlaces(0);
+        slider.setFromDiscreteValue(value - min);
+        slider.onChanged().subscribe(v -> {
+            int actual = min + (int) Math.round(v);
+            if (actual == value) return;
+            onChanged.accept(actual);
+        });
+
+        row.child(slider);
+        return row;
+    }
+
+    /**
+     * Create a labelled discrete slider row with a custom step.
+     */
+    private static FlowLayout makeDiscreteSlider(String labelKey, int value,
+                                                  int min, int max, int step,
+                                                  java.util.function.Consumer<Integer> onChanged) {
+        FlowLayout row = (FlowLayout) Containers.horizontalFlow(Sizing.fill(100), Sizing.fixed(COMPONENT_HEIGHT))
+                .gap(GAP)
+                .alignment(HorizontalAlignment.LEFT, VerticalAlignment.CENTER);
+
+        row.child(Components.label(Component.translatable(labelKey)).shadow(true));
+
+        int steps = (max - min) / step;
+        DiscreteSliderComponent slider = Components.discreteSlider(Sizing.fixed(SLIDER_WIDTH), 0, steps);
+        slider.snap(true).decimalPlaces(0);
+        slider.setFromDiscreteValue((value - min) / step);
+        slider.onChanged().subscribe(v -> {
+            int actual = min + (int) Math.round(v) * step;
+            if (actual == value) return;
+            onChanged.accept(actual);
+        });
+
+        row.child(slider);
         return row;
     }
 

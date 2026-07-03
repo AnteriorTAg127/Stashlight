@@ -2,7 +2,6 @@ package dev.strangequark.stashlight.scan;
 
 import dev.strangequark.stashlight.Stashlight;
 import dev.strangequark.stashlight.config.Config;
-import dev.strangequark.stashlight.mixin.SilentOpenManager;
 import dev.strangequark.stashlight.repository.ContainerRepository;
 import dev.strangequark.stashlight.util.Util;
 import net.minecraft.client.Minecraft;

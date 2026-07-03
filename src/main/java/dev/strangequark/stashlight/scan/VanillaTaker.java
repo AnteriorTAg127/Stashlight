@@ -1,7 +1,7 @@
 package dev.strangequark.stashlight.scan;
 
 import dev.strangequark.stashlight.config.Config;
-import dev.strangequark.stashlight.mixin.SilentOpenManager;
+import dev.strangequark.stashlight.scan.SilentOpenManager;
 import dev.strangequark.stashlight.model.DisplayItem;
 import dev.strangequark.stashlight.util.Util;
 import net.minecraft.client.Minecraft;
@@ -124,6 +124,7 @@ public final class VanillaTaker {
                 } else if (tickCounter > 40) {
                     // timeout — skip this container
                     closeContainer(client, SilentOpenManager.getExpectedContainerId());
+                    SilentOpenManager.finish();
                     candidateIndex++;
                     state = State.INTERVAL;
                     tickCounter = 0;
@@ -132,6 +133,7 @@ public final class VanillaTaker {
             case TAKE -> {
                 if (tickCounter < 1) break;
                 if (remaining <= 0) {
+                    SilentOpenManager.finish();
                     state = State.DONE;
                     break;
                 }
@@ -145,6 +147,7 @@ public final class VanillaTaker {
                     LOGGER.debug("Item not found in container {}, skipping", candidateIndex);
                 }
                 closeContainer(client, SilentOpenManager.getExpectedContainerId());
+                SilentOpenManager.finish();
                 candidateIndex++;
                 state = State.INTERVAL;
                 tickCounter = 0;
