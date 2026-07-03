@@ -16,14 +16,14 @@
   "icon": "assets/stashlight/icon.png",
   "environment": "*",
   "entrypoints": {
+    "main": [
+      "dev.strangequark.stashlight.StashlightServer"
+    ],
     "client": [
       "dev.strangequark.stashlight.Stashlight"
-    ],
-    "server": [
-      "dev.strangequark.stashlight.StashlightServer"
     ]
   },
-  "mixins": [],
+  "mixins": ["stashlight.mixins.json"],
   "accessWidener": "stashlight.accesswidener",
   "depends": {
     "fabricloader": ">=0.17.3",

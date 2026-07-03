@@ -5,7 +5,7 @@ import dev.strangequark.stashlight.net.*;
 import dev.strangequark.stashlight.server.ContainerSignatureStore;
 import dev.strangequark.stashlight.server.RateLimiter;
 import dev.strangequark.stashlight.server.ServerScanner;
-import net.fabricmc.api.DedicatedServerModInitializer;
+import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PacketSender;
@@ -32,7 +32,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class StashlightServer implements DedicatedServerModInitializer {
+public class StashlightServer implements ModInitializer {
 
     // Dedicated-server-side logger. Do NOT use Stashlight.LOGGER here — that class
     // is the client entry point and referencing it on the server triggers loading
@@ -48,7 +48,7 @@ public class StashlightServer implements DedicatedServerModInitializer {
     private final Map<UUID, ResourceKey<Level>> lastPlayerDimension = new HashMap<>();
 
     @Override
-    public void onInitializeServer() {
+    public void onInitialize() {
         ServerConfig.get();
 
         registerPayloads();
@@ -91,6 +91,10 @@ public class StashlightServer implements DedicatedServerModInitializer {
         // v2
         PayloadTypeRegistry.playC2S().register(ClientReadyPayload.TYPE, ClientReadyPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(ContainerUpdatePayload.TYPE, ContainerUpdatePayload.CODEC);
+
+        // v3
+        PayloadTypeRegistry.playC2S().register(TakeItemRequestPayload.TYPE, TakeItemRequestPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(TakeItemResponsePayload.TYPE, TakeItemResponsePayload.CODEC);
     }
 
     private void onPlayerJoin(ServerGamePacketListenerImpl handler, PacketSender sender, MinecraftServer server) {
@@ -98,7 +102,8 @@ public class StashlightServer implements DedicatedServerModInitializer {
         sender.sendPacket(new HandshakePayload(
                 cfg.enabled(),
                 cfg.scan().maxRadius(),
-                StashlightPayloads.PROTOCOL_VERSION
+                StashlightPayloads.PROTOCOL_VERSION,
+                cfg.take().enabled()
         ));
     }
 

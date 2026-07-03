@@ -85,6 +85,11 @@ public class Stashlight implements ClientModInitializer {
     private volatile boolean serverEnabled = false;
     private volatile int serverMaxRadius = 0;
     private volatile int serverProtocolVersion = 0;
+    private volatile boolean serverTakeEnabled = false;
+
+    // Derived mode flags (recomputed after each handshake).
+    private volatile boolean moddedScanAvailable = false;
+    private volatile boolean moddedTakeAvailable = false;
 
     // F9: timestamp of the most recent server data arrival. Read by the search
     // screen to render "data: X seconds ago". Updated on the final chunk of
@@ -176,6 +181,10 @@ public class Stashlight implements ClientModInitializer {
         // v2: join push + incremental response
         PayloadTypeRegistry.playC2S().register(ClientReadyPayload.TYPE, ClientReadyPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(ContainerUpdatePayload.TYPE, ContainerUpdatePayload.CODEC);
+
+        // v3: remote item take
+        PayloadTypeRegistry.playC2S().register(TakeItemRequestPayload.TYPE, TakeItemRequestPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(TakeItemResponsePayload.TYPE, TakeItemResponsePayload.CODEC);
     }
 
     private void registerNetworkHandlers() {
@@ -185,6 +194,11 @@ public class Stashlight implements ClientModInitializer {
                     serverEnabled = payload.enabled();
                     serverMaxRadius = payload.maxRadius();
                     serverProtocolVersion = payload.protocolVersion();
+                    serverTakeEnabled = payload.takeEnabled();
+
+                    // Recompute derived mode flags
+                    moddedScanAvailable = serverModPresent && serverEnabled && serverProtocolVersion >= 2;
+                    moddedTakeAvailable = serverModPresent && serverEnabled && serverProtocolVersion >= 3 && serverTakeEnabled;
 
                     if (serverProtocolVersion >= 2 && serverEnabled && repository != null) {
                         var cached = buildCachedSignatures();
@@ -205,6 +219,21 @@ public class Stashlight implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(ContainerUpdatePayload.TYPE, (payload, context) ->
                 context.client().execute(() -> handleContainerUpdate(payload))
         );
+
+        // v3: take response
+        ClientPlayNetworking.registerGlobalReceiver(TakeItemResponsePayload.TYPE, (payload, context) ->
+                context.client().execute(() -> handleTakeItemResponse(payload))
+        );
+    }
+
+    private void handleTakeItemResponse(TakeItemResponsePayload payload) {
+        // Stub — will be wired to TakeClient in Phase D.
+        int nonce = payload.nonce();
+        int result = payload.result();
+        int taken = payload.taken();
+        if (result != TakeResult.SUCCESS.ordinal()) {
+            Stashlight.LOGGER.warn("Take request {} failed: {} (taken={})", nonce, result, taken);
+        }
     }
 
     private void resetServerState() {
@@ -212,6 +241,9 @@ public class Stashlight implements ClientModInitializer {
         serverEnabled = false;
         serverMaxRadius = 0;
         serverProtocolVersion = 0;
+        serverTakeEnabled = false;
+        moddedScanAvailable = false;
+        moddedTakeAvailable = false;
         lastServerDataTime = 0L;
     }
 
@@ -229,6 +261,18 @@ public class Stashlight implements ClientModInitializer {
 
     public int getServerProtocolVersion() {
         return serverProtocolVersion;
+    }
+
+    public boolean isServerTakeEnabled() {
+        return serverTakeEnabled;
+    }
+
+    public boolean isModdedScanAvailable() {
+        return moddedScanAvailable;
+    }
+
+    public boolean isModdedTakeAvailable() {
+        return moddedTakeAvailable;
     }
 
     public long getLastServerDataTime() {

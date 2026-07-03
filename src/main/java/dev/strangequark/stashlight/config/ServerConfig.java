@@ -28,6 +28,7 @@ public final class ServerConfig {
     private PushConfig push = new PushConfig();
     private PermissionConfig permission = new PermissionConfig();
     private LimitConfig limits = new LimitConfig();
+    private TakeConfig take = new TakeConfig();
 
     public static ServerConfig get() {
         if (INSTANCE == null) load();
@@ -58,6 +59,7 @@ public final class ServerConfig {
         if (push == null) push = new PushConfig();
         if (permission == null) permission = new PermissionConfig();
         if (limits == null) limits = new LimitConfig();
+        if (take == null) take = new TakeConfig();
     }
 
     public static void save() {
@@ -74,6 +76,7 @@ public final class ServerConfig {
     public PushConfig push() { return push; }
     public PermissionConfig permission() { return permission; }
     public LimitConfig limits() { return limits; }
+    public TakeConfig take() { return take; }
 
     public static final class ScanConfig {
         private int maxRadius = 48;
@@ -129,6 +132,18 @@ public final class ServerConfig {
         private int maxResponseBytes = 1024 * 1024;
 
         public int maxResponseBytes() { return Math.max(maxResponseBytes, 4096); }
+    }
+
+    public static final class TakeConfig {
+        private boolean enabled = false;
+        private int maxRadius = 6;
+        private int maxCountPerRequest = 64;
+        private int minRequestIntervalTicks = 20;
+
+        public boolean enabled() { return enabled; }
+        public int maxRadius() { return clamp(maxRadius, 4, 32); }
+        public int maxCountPerRequest() { return clamp(maxCountPerRequest, 1, 4096); }
+        public int minRequestIntervalTicks() { return clamp(minRequestIntervalTicks, 1, 1200); }
     }
 
     private static int clamp(int value, int min, int max) {
