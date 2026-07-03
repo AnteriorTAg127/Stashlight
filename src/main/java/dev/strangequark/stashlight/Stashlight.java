@@ -24,7 +24,6 @@ import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.event.client.player.ClientPlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -118,6 +117,17 @@ public class Stashlight implements ClientModInitializer {
 
     private final AtomicInteger scanNonceGenerator = new AtomicInteger(1);
 
+    public VanillaScanner getVanillaScanner() {
+        return vanillaScanner;
+    }
+
+    public VanillaTaker getVanillaTaker() {
+        return vanillaTaker;
+    }
+
+    // Cooldown to avoid duplicate scan requests (e.g. ProximityScanner + SearchScreen).
+    private volatile long lastScanRequestTime = 0L;
+
     @Override
     public void onInitializeClient() {
         INSTANCE = this;
@@ -197,6 +207,7 @@ public class Stashlight implements ClientModInitializer {
             proximityScanner = new ProximityScanner();
             vanillaScanner = new VanillaScanner();
             vanillaTaker = new VanillaTaker();
+            vanillaTaker.setRepository(repository);
             takeClient = new TakeClient();
         });
 
@@ -210,21 +221,6 @@ public class Stashlight implements ClientModInitializer {
             repository = null;
             autoIndexer = null;
         });
-    }
-
-    private void registerPayloads() {
-        PayloadTypeRegistry.playS2C().register(HandshakePayload.TYPE, HandshakePayload.CODEC);
-        PayloadTypeRegistry.playC2S().register(ScanRequestPayload.TYPE, ScanRequestPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(ScanResponsePayload.TYPE, ScanResponsePayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(ScanErrorPayload.TYPE, ScanErrorPayload.CODEC);
-
-        // v2: join push + incremental response
-        PayloadTypeRegistry.playC2S().register(ClientReadyPayload.TYPE, ClientReadyPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(ContainerUpdatePayload.TYPE, ContainerUpdatePayload.CODEC);
-
-        // v3: remote item take
-        PayloadTypeRegistry.playC2S().register(TakeItemRequestPayload.TYPE, TakeItemRequestPayload.CODEC);
-        PayloadTypeRegistry.playS2C().register(TakeItemResponsePayload.TYPE, TakeItemResponsePayload.CODEC);
     }
 
     private void registerNetworkHandlers() {
@@ -318,6 +314,14 @@ public class Stashlight implements ClientModInitializer {
         return lastServerDataTime;
     }
 
+    /**
+     * Timestamp of the most recent scan request sent to the server.
+     * Used by SearchScreen to deduplicate against ProximityScanner-triggered scans.
+     */
+    public long getLastScanRequestTime() {
+        return lastScanRequestTime;
+    }
+
     public void requestServerScan() {
         sendScanRequest(false);
     }
@@ -333,6 +337,7 @@ public class Stashlight implements ClientModInitializer {
         int radius = Math.min(serverMaxRadius, dev.strangequark.stashlight.config.Config.get().autoIndex().radius());
         int nonce = forceFull ? -1 : scanNonceGenerator.getAndIncrement();
         ClientPlayNetworking.send(new ScanRequestPayload(radius, "same", nonce));
+        lastScanRequestTime = System.currentTimeMillis();
     }
 
     private void handleScanResponse(ScanResponsePayload payload) {
@@ -358,6 +363,7 @@ public class Stashlight implements ClientModInitializer {
 
         if (payload.chunkIndex() == payload.chunkTotal() - 1) {
             lastServerDataTime = System.currentTimeMillis();
+            if (proximityScanner != null) proximityScanner.clearBackoff();
             var screen = Minecraft.getInstance().screen;
             if (screen instanceof SearchScreen searchScreen) {
                 searchScreen.refreshFromServer();
@@ -393,6 +399,7 @@ public class Stashlight implements ClientModInitializer {
 
         if (payload.chunkIndex() == payload.chunkTotal() - 1) {
             lastServerDataTime = now;
+            if (proximityScanner != null) proximityScanner.clearBackoff();
             var screen = Minecraft.getInstance().screen;
             if (screen instanceof SearchScreen searchScreen) {
                 searchScreen.refreshFromServer();
@@ -448,6 +455,7 @@ public class Stashlight implements ClientModInitializer {
         BlockPos canonicalPos = Util.getCanonicalPos(clientLevel, blockPos);
         String dimension = Util.getDimensionName(clientLevel);
         repository.remove(dimension, canonicalPos);
+        repository.removeServer(dimension, canonicalPos);
     }
 
 

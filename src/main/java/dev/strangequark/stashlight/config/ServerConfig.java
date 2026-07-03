@@ -139,11 +139,15 @@ public final class ServerConfig {
         private int maxRadius = 6;
         private int maxCountPerRequest = 64;
         private int minRequestIntervalTicks = 20;
+        private int bucketCapacity = 16;
+        private int refillTicks = 40;
 
         public boolean enabled() { return enabled; }
         public int maxRadius() { return clamp(maxRadius, 4, 32); }
         public int maxCountPerRequest() { return clamp(maxCountPerRequest, 1, 4096); }
         public int minRequestIntervalTicks() { return clamp(minRequestIntervalTicks, 1, 1200); }
+        public int bucketCapacity() { return clamp(bucketCapacity, 1, 64); }
+        public int refillTicks() { return clamp(refillTicks, 1, 1200); }
     }
 
     private static int clamp(int value, int min, int max) {

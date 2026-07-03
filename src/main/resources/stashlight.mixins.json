@@ -3,7 +3,8 @@
   "package": "dev.strangequark.stashlight.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "ClientPacketListenerMixin"
+    "ClientPacketListenerMixin",
+    "ClientLevelMixin"
   ],
   "injectors": {
     "defaultRequire": 1

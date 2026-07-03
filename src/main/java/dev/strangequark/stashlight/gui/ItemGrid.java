@@ -216,10 +216,12 @@ public class ItemGrid extends BaseComponent {
         } else if (click.button() == 0) {
             // Left-click
             if (Config.get().remoteTake().enabled()) {
-                // Take mode
-                int qty = shift ? 64 : -1; // -1 = show dialog
-                if (qty > 0) {
-                    startTake(item, qty);
+                if (shift) {
+                    // Take a full stack from all available sources
+                    int totalAvailable = item.sources().stream()
+                            .mapToInt(s -> s.stack().getCount())
+                            .sum();
+                    startTake(item, Math.max(1, totalAvailable));
                 } else {
                     openTakeDialog(item);
                 }

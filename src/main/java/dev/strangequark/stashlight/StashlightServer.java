@@ -6,6 +6,7 @@ import dev.strangequark.stashlight.server.ContainerSignatureStore;
 import dev.strangequark.stashlight.server.RateLimiter;
 import dev.strangequark.stashlight.server.ServerScanner;
 import dev.strangequark.stashlight.util.SignatureUtil;
+import dev.strangequark.stashlight.util.Util;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -45,8 +46,14 @@ public class StashlightServer implements ModInitializer {
     // of client-only classes (KeyMapping, Screen, ...) which crashes the server.
     private static final Logger LOGGER = LoggerFactory.getLogger("Stashlight");
 
-    private final RateLimiter rateLimiter = new RateLimiter();
-    private final RateLimiter takeRateLimiter = new RateLimiter();
+    private final RateLimiter rateLimiter = new RateLimiter(
+            () -> ServerConfig.get().rateLimit().minRequestIntervalTicks(),
+            () -> ServerConfig.get().rateLimit().bucketCapacity(),
+            () -> ServerConfig.get().rateLimit().refillTicks());
+    private final RateLimiter takeRateLimiter = new RateLimiter(
+            () -> ServerConfig.get().take().minRequestIntervalTicks(),
+            () -> ServerConfig.get().take().bucketCapacity(),
+            () -> ServerConfig.get().take().refillTicks());
     private final AtomicInteger nonceGenerator = new AtomicInteger(0);
 
     // v2 state — join push + incremental response
@@ -283,9 +290,9 @@ public class StashlightServer implements ModInitializer {
         ItemStack removed = container.removeItem(p.slot(), takeCount);
 
         if (!player.getInventory().add(removed)) {
-            // Inventory full — drop at player's feet instead of failing
-            player.drop(removed, false);
-            respondTake(player, nonce, TakeResult.SUCCESS, takeCount);
+            // Inventory full — put the item back in the container and report failure
+            container.setItem(p.slot(), removed);
+            respondTake(player, nonce, TakeResult.INVENTORY_FULL, 0);
             return;
         }
 
@@ -297,7 +304,7 @@ public class StashlightServer implements ModInitializer {
         // 8. Mark signature dirty for next scan push
         if (signatureStore != null) {
             signatureStore.put(player.getUUID(),
-                    level.dimension().location().toString(), p.pos(),
+                    Util.getDimensionName(level), p.pos(),
                     SignatureUtil.computeSignature(container));
         }
 

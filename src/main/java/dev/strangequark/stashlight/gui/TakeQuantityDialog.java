@@ -3,7 +3,9 @@ package dev.strangequark.stashlight.gui;
 import dev.strangequark.stashlight.config.Config;
 import dev.strangequark.stashlight.model.DisplayItem;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
+import io.wispforest.owo.ui.component.ButtonComponent;
 import io.wispforest.owo.ui.component.Components;
+import io.wispforest.owo.ui.component.LabelComponent;
 import io.wispforest.owo.ui.component.TextBoxComponent;
 import io.wispforest.owo.ui.container.Containers;
 import io.wispforest.owo.ui.container.FlowLayout;
@@ -16,17 +18,18 @@ import org.jetbrains.annotations.NotNull;
 import static dev.strangequark.stashlight.gui.UIStyle.*;
 
 /**
- * A small owo dialog for specifying how many items to take.
- * Shown when left-clicking a search result with {@code remoteTake.enabled}.
- * <p>
- * Shift+left-click in {@link ItemGrid} skips this dialog entirely
- * (takes one stack).
+ * Quantity picker dialog. Shows a text input + quick buttons (+64/-64/+16/-16/+1/-1)
+ * that all stay in sync. Changes propagate bidirectionally: editing the text updates
+ * the internal value, clicking buttons updates both text and value.
  */
 public final class TakeQuantityDialog extends BaseOwoScreen<FlowLayout> {
 
     private final Screen parent;
     private final DisplayItem target;
     private TextBoxComponent quantityInput;
+    private LabelComponent qtyLabel;
+    private int quantity;
+    private int maxQty;
 
     public TakeQuantityDialog(Screen parent, DisplayItem target) {
         this.parent = parent;
@@ -51,43 +54,103 @@ public final class TakeQuantityDialog extends BaseOwoScreen<FlowLayout> {
                 Component.translatable("gui.stashlight.take.title", target.stack().getHoverName())
         ).shadow(true));
 
-        // Quantity text box
-        int defaultQty = Config.get().remoteTake().defaultQuantity();
-        this.quantityInput = Components.textBox(Sizing.fixed(80), String.valueOf(defaultQty));
+        // Maximum available
+        maxQty = target.sources().stream().mapToInt(s -> s.stack().getCount()).sum();
+        if (maxQty < 1) maxQty = 1;
+        this.quantity = Math.min(Config.get().remoteTake().defaultQuantity(), maxQty);
+
+        // Quantity input row: label + textbox + "/ max"
+        FlowLayout inputRow = (FlowLayout) Containers.horizontalFlow(Sizing.content(), Sizing.content())
+                .gap(GAP)
+                .horizontalAlignment(HorizontalAlignment.CENTER)
+                .verticalAlignment(VerticalAlignment.CENTER);
+
+        inputRow.child(Components.label(Component.translatable("gui.stashlight.label.quantity")).shadow(true));
+
+        this.quantityInput = Components.textBox(Sizing.fixed(60), String.valueOf(quantity));
         this.quantityInput.setMaxLength(4);
         this.quantityInput.onChanged().subscribe(s -> {
-            // Only allow digits — filter in subscribe (setter may not exist)
+            int parsed = parseQty(s);
+            if (parsed > 0) {
+                quantity = Math.min(parsed, maxQty);
+                updateDisplays();
+            }
         });
-        rootComponent.child(this.quantityInput);
+        inputRow.child(quantityInput);
 
-        // Buttons
-        FlowLayout buttonRow = (FlowLayout) Containers.horizontalFlow(Sizing.content(), Sizing.content())
+        qtyLabel = (LabelComponent) Components.label(
+                Component.literal("/ " + maxQty)
+        ).shadow(true);
+        inputRow.child(qtyLabel);
+        rootComponent.child(inputRow);
+
+        // Quick quantity buttons
+        FlowLayout btnRow1 = (FlowLayout) Containers.horizontalFlow(Sizing.content(), Sizing.content())
                 .gap(GAP)
                 .horizontalAlignment(HorizontalAlignment.CENTER);
 
-        buttonRow.child(Components.button(
+        addQtyButton(btnRow1, "+64", 64);
+        addQtyButton(btnRow1, "+16", 16);
+        addQtyButton(btnRow1, "+1", 1);
+
+        FlowLayout btnRow2 = (FlowLayout) Containers.horizontalFlow(Sizing.content(), Sizing.content())
+                .gap(GAP)
+                .horizontalAlignment(HorizontalAlignment.CENTER);
+
+        addQtyButton(btnRow2, "-1", -1);
+        addQtyButton(btnRow2, "-16", -16);
+        addQtyButton(btnRow2, "-64", -64);
+
+        rootComponent.child(btnRow1);
+        rootComponent.child(btnRow2);
+
+        // Confirm / Cancel
+        FlowLayout actionRow = (FlowLayout) Containers.horizontalFlow(Sizing.content(), Sizing.content())
+                .gap(GAP)
+                .horizontalAlignment(HorizontalAlignment.CENTER);
+
+        actionRow.child(Components.button(
                 Component.translatable("gui.stashlight.take.confirm"),
                 b -> confirmTake()
         ).sizing(Sizing.fixed(60), Sizing.fixed(COMPONENT_HEIGHT)));
 
-        buttonRow.child(Components.button(
+        actionRow.child(Components.button(
                 Component.translatable("gui.stashlight.take.cancel"),
                 b -> onClose()
         ).sizing(Sizing.fixed(60), Sizing.fixed(COMPONENT_HEIGHT)));
 
-        rootComponent.child(buttonRow);
+        rootComponent.child(actionRow);
+    }
+
+    private void addQtyButton(FlowLayout row, String label, int delta) {
+        ButtonComponent btn = (ButtonComponent) Components.button(Component.literal(label), b -> {
+            quantity = Math.max(1, Math.min(maxQty, quantity + delta));
+            updateDisplays();
+        }).sizing(Sizing.fixed(40), Sizing.fixed(COMPONENT_HEIGHT));
+        row.child(btn);
+    }
+
+    /**
+     * Sync both the text box and the label to the current quantity.
+     */
+    private void updateDisplays() {
+        quantityInput.text(String.valueOf(quantity));
+        quantityInput.moveCursorToEnd(false);
+        qtyLabel.text(Component.literal("/ " + maxQty));
+    }
+
+    private static int parseQty(String s) {
+        if (s == null || s.isBlank()) return -1;
+        try {
+            return Integer.parseInt(s.trim());
+        } catch (NumberFormatException e) {
+            return -1;
+        }
     }
 
     private void confirmTake() {
-        int qty;
-        try {
-            qty = Integer.parseInt(this.quantityInput.getValue().trim());
-        } catch (NumberFormatException e) {
-            qty = Config.get().remoteTake().defaultQuantity();
-        }
-        qty = Math.max(1, Math.min(qty, 64 * target.sources().size()));
+        int qty = Math.max(1, Math.min(quantity, maxQty));
 
-        // Close ourselves, then execute the take
         Minecraft mc = Minecraft.getInstance();
         mc.setScreen(null);
 

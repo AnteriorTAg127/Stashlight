@@ -8,6 +8,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.item.ItemStack;
@@ -18,7 +19,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+
+import dev.strangequark.stashlight.model.DataSourceMode;
+import dev.strangequark.stashlight.model.IndexedItem;
+import dev.strangequark.stashlight.repository.ContainerRepository;
 
 /**
  * Vanilla-fallback taker. When the server has no modded take capability,
@@ -47,9 +55,14 @@ public final class VanillaTaker {
     private int totalWanted;
     private int takenSoFar;
     private int tickCounter;
+    private ContainerRepository repository;
 
     public VanillaTaker() {
         INSTANCE = this;
+    }
+
+    public void setRepository(ContainerRepository repo) {
+        this.repository = repo;
     }
 
     /**
@@ -138,7 +151,8 @@ public final class VanillaTaker {
                     break;
                 }
                 int taken = takeFromOpenContainer(client, targetStack, remaining);
-                if (taken > 0) {
+                boolean hadItem = taken > 0;
+                if (hadItem) {
                     remaining -= taken;
                     takenSoFar += taken;
                     showProgress();
@@ -149,28 +163,28 @@ public final class VanillaTaker {
                 closeContainer(client, SilentOpenManager.getExpectedContainerId());
                 SilentOpenManager.finish();
                 candidateIndex++;
-                state = State.INTERVAL;
+                // Only wait the interval if we actually took items; empty containers skip ahead
+                state = hadItem ? State.INTERVAL : State.OPEN;
                 tickCounter = 0;
             }
             case INTERVAL -> {
-                int intervalTicks = Math.max(1, cfg.loopIntervalMillis() / 50);
+                int intervalTicks = Math.max(1, cfg.takeIntervalMillis() / 50);
                 if (tickCounter >= intervalTicks) {
                     state = State.OPEN;
                     tickCounter = 0;
                 }
             }
             case DONE -> {
-                String msg;
-                if (remaining <= 0) {
-                    msg = "Took " + takenSoFar;
-                } else {
-                    msg = "Only got " + takenSoFar + "/" + totalWanted + " (ran out in range)";
-                }
                 if (client.player != null) {
-                    client.player.displayClientMessage(
-                            net.minecraft.network.chat.Component.literal(msg), true);
+                    Component msg;
+                    if (remaining <= 0) {
+                        msg = Component.translatable("gui.stashlight.message.takeDone", takenSoFar);
+                    } else {
+                        msg = Component.translatable("gui.stashlight.message.takePartial", takenSoFar, totalWanted);
+                    }
+                    client.player.displayClientMessage(msg, true);
                 }
-                LOGGER.info("VanillaTaker done: {}", msg);
+                LOGGER.info("VanillaTaker done: {} taken of {} wanted", takenSoFar, totalWanted);
                 state = State.IDLE;
             }
         }
@@ -209,6 +223,9 @@ public final class VanillaTaker {
                 for (var invSlot : menu.slots) {
                     if (placed >= want) break;
                     if (invSlot.container != player.getInventory()) continue;
+                    // Only target main inventory slots (0..35: hotbar + main),
+                    // excluding armor (36-39), offhand (40), and crafting slots.
+                    if (invSlot.index >= 36) continue;
                     if (!invSlot.getItem().isEmpty()) continue;
                     client.gameMode.handleInventoryMouseClick(
                             menu.containerId, invSlot.index, 1, ClickType.PICKUP, player);
@@ -227,24 +244,53 @@ public final class VanillaTaker {
     private List<BlockPos> buildReachableContainers(Minecraft client) {
         if (client.level == null || client.player == null) return List.of();
 
-        List<BlockPos> result = new ArrayList<>();
+        // Step 1: Collect indexed positions that have the target item
+        Set<BlockPos> indexedPositions = new LinkedHashSet<>();
+        if (repository != null && targetStack != null && targetKey != null) {
+            String currentDim = Util.getDimensionName(client.level);
+            List<IndexedItem> searchIndex = repository.getSearchIndex(DataSourceMode.MERGED);
+            for (IndexedItem item : searchIndex) {
+                if (!item.dimension().equals(currentDim)) continue;
+                if (targetKey.equals(new StackKey(item.stack()))) {
+                    indexedPositions.add(item.pos());
+                }
+            }
+        }
+
+        // Step 2: Start with indexed positions (tried first)
+        List<BlockPos> result = new ArrayList<>(indexedPositions);
+        Set<BlockPos> seen = new HashSet<>(indexedPositions);
+
+        // If only indexed containers are wanted, skip brute-force scan
+        if (Config.get().vanillaFallback().takeOnlyIndexed()) {
+            return result;
+        }
+
+        // Step 3: Brute-force scan remaining containers not in the index
         BlockPos center = client.player.blockPosition();
         double reachSq = 4.5 * 4.5;
         int radius = 5;
 
-        for (int dx = -radius; dx <= radius; dx++) {
-            for (int dz = -radius; dz <= radius; dz++) {
-                for (int dy = -2; dy <= 3; dy++) {
-                    BlockPos pos = center.offset(dx, dy, dz);
-                    if (pos.distSqr(center) > reachSq) continue;
-                    if (!client.level.isLoaded(pos)) continue;
-                    var state = client.level.getBlockState(pos);
-                    if (Util.isValidSearchableContainer(state)) {
-                        result.add(pos);
+        int maxScanSlots = Config.get().vanillaFallback().maxContainersPerLoop() - result.size();
+        if (maxScanSlots > 0) {
+            for (int dx = -radius; dx <= radius && result.size() < maxScanSlots; dx++) {
+                for (int dz = -radius; dz <= radius && result.size() < maxScanSlots; dz++) {
+                    for (int dy = -2; dy <= 3 && result.size() < maxScanSlots; dy++) {
+                        BlockPos pos = center.offset(dx, dy, dz);
+                        if (pos.distSqr(center) > reachSq) continue;
+                        if (!client.level.isLoaded(pos)) continue;
+                        var state = client.level.getBlockState(pos);
+                        if (Util.isValidSearchableContainer(state)) {
+                            BlockPos canonical = Util.getCanonicalPos(client.level, pos);
+                            if (seen.add(canonical)) {
+                                result.add(canonical);
+                            }
+                        }
                     }
                 }
             }
         }
+
         return result;
     }
 
@@ -276,8 +322,7 @@ public final class VanillaTaker {
         var mc = Minecraft.getInstance();
         if (mc.player != null) {
             mc.player.displayClientMessage(
-                    net.minecraft.network.chat.Component.literal(
-                            "Taking: " + takenSoFar + "/" + totalWanted),
+                    Component.translatable("gui.stashlight.message.takingProgress", takenSoFar, totalWanted),
                     true);
         }
     }
@@ -290,7 +335,7 @@ public final class VanillaTaker {
         state = State.IDLE;
         if (Minecraft.getInstance().player != null) {
             Minecraft.getInstance().player.displayClientMessage(
-                    net.minecraft.network.chat.Component.literal("Take: " + reason), true);
+                    Component.translatable("gui.stashlight.message.takeStop", reason), true);
         }
     }
 

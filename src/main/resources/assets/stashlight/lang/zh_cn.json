@@ -61,8 +61,20 @@
   "gui.stashlight.label.loopInterval": "循环间隔（毫秒）",
   "gui.stashlight.label.maxContainersPerLoop": "每轮最大容器数",
   "gui.stashlight.label.blockFilter": "方块过滤器",
+  "gui.stashlight.blockFilter.chest": "箱子",
+  "gui.stashlight.blockFilter.barrel": "木桶",
+  "gui.stashlight.blockFilter.shulker_box": "潜影盒",
+  "gui.stashlight.blockFilter.trapped_chest": "陷阱箱",
+  "gui.stashlight.blockFilter.hopper": "漏斗",
+  "gui.stashlight.blockFilter.dispenser": "发射器",
+  "gui.stashlight.blockFilter.dropper": "投掷器",
   "gui.stashlight.label.scanComboKey": "扫描快捷键",
+  "gui.stashlight.label.pressAnyKey": "按下任意键...",
   "gui.stashlight.label.scanComboMods": "扫描修饰键",
+
+  "gui.stashlight.label.vanillaFallbackTaker": "原版服取物",
+  "gui.stashlight.label.takeLoopInterval": "取物间隔（毫秒）",
+  "gui.stashlight.label.takeOnlyIndexed": "仅使用索引容器",
 
   "gui.stashlight.label.liveSlotHighlight": "实时槽位高亮",
   "gui.stashlight.label.inventoryBar": "背包栏",
@@ -73,6 +85,16 @@
   "gui.stashlight.take.confirm": "拿取",
   "gui.stashlight.take.cancel": "取消",
 
-  "gui.stashlight.tooltip.takeHints": "左键：拿取 | 右键：高亮 | Shift+左键：拿一组",
-  "gui.stashlight.tooltip.highlightHints": "左键：高亮 | 右键：高亮"
+  "gui.stashlight.tooltip.takeHints": "左键：拿取 | 右键：高亮 | Shift+左键：全拿",
+  "gui.stashlight.tooltip.highlightHints": "左键：高亮 | 右键：高亮",
+
+  "gui.stashlight.label.quantity": "数量：",
+
+  "gui.stashlight.message.takingProgress": "拿取中：%s/%s",
+  "gui.stashlight.message.takeDone": "已拿取 %s",
+  "gui.stashlight.message.takePartial": "仅拿到 %s/%s（范围内已耗尽）",
+  "gui.stashlight.message.takeFailed": "拿取失败：%s",
+  "gui.stashlight.message.takeStop": "拿取：%s",
+  "gui.stashlight.message.scanned": "扫描了 %s 个容器",
+  "gui.stashlight.message.scannerStop": "扫描器：%s"
 }

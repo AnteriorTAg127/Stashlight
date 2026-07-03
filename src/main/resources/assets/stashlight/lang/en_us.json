@@ -61,8 +61,20 @@
   "gui.stashlight.label.loopInterval": "Loop Interval (ms)",
   "gui.stashlight.label.maxContainersPerLoop": "Max Containers / Loop",
   "gui.stashlight.label.blockFilter": "Block Filter",
+  "gui.stashlight.blockFilter.chest": "Chest",
+  "gui.stashlight.blockFilter.barrel": "Barrel",
+  "gui.stashlight.blockFilter.shulker_box": "Shulker",
+  "gui.stashlight.blockFilter.trapped_chest": "Trap Chest",
+  "gui.stashlight.blockFilter.hopper": "Hopper",
+  "gui.stashlight.blockFilter.dispenser": "Dispenser",
+  "gui.stashlight.blockFilter.dropper": "Dropper",
   "gui.stashlight.label.scanComboKey": "Scan Key",
+  "gui.stashlight.label.pressAnyKey": "Press any key...",
   "gui.stashlight.label.scanComboMods": "Scan Modifiers",
+
+  "gui.stashlight.label.vanillaFallbackTaker": "Vanilla-fallback Taker",
+  "gui.stashlight.label.takeLoopInterval": "Take Interval (ms)",
+  "gui.stashlight.label.takeOnlyIndexed": "Indexed containers only",
 
   "gui.stashlight.label.liveSlotHighlight": "Live Slot Highlight",
   "gui.stashlight.label.inventoryBar": "Inventory Bar",
@@ -73,6 +85,16 @@
   "gui.stashlight.take.confirm": "Take",
   "gui.stashlight.take.cancel": "Cancel",
 
-  "gui.stashlight.tooltip.takeHints": "LMB: Take | RMB: Highlight | Shift+LMB: Take stack",
-  "gui.stashlight.tooltip.highlightHints": "LMB: Highlight | RMB: Highlight"
+  "gui.stashlight.tooltip.takeHints": "LMB: Take | RMB: Highlight | Shift+LMB: Take all",
+  "gui.stashlight.tooltip.highlightHints": "LMB: Highlight | RMB: Highlight",
+
+  "gui.stashlight.label.quantity": "Qty:",
+
+  "gui.stashlight.message.takingProgress": "Taking: %s/%s",
+  "gui.stashlight.message.takeDone": "Took %s",
+  "gui.stashlight.message.takePartial": "Only got %s/%s (ran out in range)",
+  "gui.stashlight.message.takeFailed": "Take failed: %s",
+  "gui.stashlight.message.takeStop": "Take: %s",
+  "gui.stashlight.message.scanned": "Scanned %s containers",
+  "gui.stashlight.message.scannerStop": "Scanner: %s"
 }

@@ -57,7 +57,8 @@ public final class TakeClient {
         for (IndexedItem source : item.sources()) {
             if (totalTaken >= count) break;
 
-            int want = Math.min(count - totalTaken, Config.get().remoteTake().defaultQuantity());
+            // Take the full remaining amount from each source (up to what's available)
+            int want = Math.min(count - totalTaken, source.stack().getCount());
             int nonce = nonceGen.getAndIncrement();
 
             final int takenBefore = totalTaken;
@@ -67,7 +68,8 @@ public final class TakeClient {
                     showProgress(totalTaken, totalWanted);
                 } else {
                     mc.player.displayClientMessage(
-                            Component.literal("Take failed: " + TakeResult.values()[response.result()].name()),
+                            Component.translatable("gui.stashlight.message.takeFailed",
+                                    TakeResult.values()[response.result()].name()),
                             true);
                 }
             });
@@ -93,7 +95,7 @@ public final class TakeClient {
         var mc = Minecraft.getInstance();
         if (mc.player != null) {
             mc.player.displayClientMessage(
-                    Component.literal("Taking: " + taken + "/" + wanted),
+                    Component.translatable("gui.stashlight.message.takingProgress", taken, wanted),
                     true);
         }
     }

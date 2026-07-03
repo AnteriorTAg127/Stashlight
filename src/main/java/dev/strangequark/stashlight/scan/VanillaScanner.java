@@ -8,6 +8,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
@@ -27,8 +28,8 @@ import java.util.Set;
  * silently opens containers via mixin, captures their contents, and closes
  * them — all without showing a screen to the player.
  * <p>
- * Triggered by a masa-style combo keybind. Runs a non-blocking state machine
- * (WAIT_OPEN / WAIT_CONTENT / WAIT_INTERVAL) driven by the client tick.
+ * Triggered by a ComboKeybind (like Masa mods) configured in the settings screen.
+ * Runs a non-blocking state machine driven by the client tick.
  */
 public final class VanillaScanner {
 
@@ -37,27 +38,33 @@ public final class VanillaScanner {
     private enum State { IDLE, BUILD_CANDIDATES, WAIT_OPEN, WAIT_CONTENT, WAIT_INTERVAL, FINISHED }
 
     private State state = State.IDLE;
-    private ComboKeybind comboKeybind;
     private List<BlockPos> candidates = new ArrayList<>();
     private int candidateIndex = 0;
     private int scannedCount = 0;
     private int tickCounter = 0;
     private boolean running = false;
 
-    public VanillaScanner() {
-        buildKeybind();
-    }
+    private ComboKeybind comboKeybind;
 
-    private void buildKeybind() {
-        var cfg = Config.get().vanillaFallback();
-        this.comboKeybind = ComboKeybind.fromConfig(cfg.scanComboKey(), cfg.scanComboMods());
+    public VanillaScanner() {
+        reloadKeybind();
     }
 
     /**
-     * Reload the keybind from config (called after config change).
+     * Rebuild the ComboKeybind from current config. Called by the settings screen
+     * after the user binds a new key.
      */
     public void reloadKeybind() {
-        buildKeybind();
+        var cfg = Config.get().vanillaFallback();
+        String keyName = cfg.scanComboKey();
+        String mods = cfg.scanComboMods();
+        ComboKeybind newBind = ComboKeybind.fromConfig(keyName, mods);
+
+        // Preserve rising-edge state if the bind actually changed
+        if (comboKeybind != null && comboKeybind.isPressed()) {
+            // Don't reset while held — let the player release first
+        }
+        this.comboKeybind = newBind;
     }
 
     /**
@@ -68,8 +75,8 @@ public final class VanillaScanner {
         var stashlight = Stashlight.getInstance();
         if (stashlight == null) return;
 
-        // Toggle on combo rising edge
-        if (comboKeybind.consumeClick()) {
+        // Toggle on ComboKeybind rising edge (like Masa mods)
+        if (comboKeybind != null && comboKeybind.consumeClick()) {
             if (running) {
                 stop("Keybind toggle off");
                 return;
@@ -104,9 +111,13 @@ public final class VanillaScanner {
                 transitionTo(State.WAIT_OPEN, 0);
             }
             case WAIT_OPEN -> {
-                if (tickCounter < 1) break; // Wait at least 1 tick before opening
+                if (tickCounter < 1) {
+                    LOGGER.debug("WAIT_OPEN tick={} pos={}/{}", tickCounter, candidateIndex, candidates.size());
+                    break;
+                }
                 if (candidateIndex >= candidates.size()
                         || scannedCount >= cfg.maxContainersPerLoop()) {
+                    LOGGER.debug("WAIT_OPEN done, scanned={}/{}", scannedCount, cfg.maxContainersPerLoop());
                     transitionTo(State.FINISHED, 0);
                     break;
                 }
@@ -115,38 +126,59 @@ public final class VanillaScanner {
                     return;
                 }
                 BlockPos pos = candidates.get(candidateIndex);
-                // Check reach
                 if (!isInReach(client.player, pos)) {
+                    LOGGER.debug("WAIT_OPEN pos {} out of reach, skip", pos);
                     candidateIndex++;
                     transitionTo(State.WAIT_OPEN, 0);
                     break;
                 }
+                LOGGER.info("Opening container {} at {}", candidateIndex, pos);
                 openContainer(client, pos);
                 transitionTo(State.WAIT_CONTENT, 0);
             }
             case WAIT_CONTENT -> {
+                LOGGER.debug("WAIT_CONTENT tick={} silent={} sc={}", tickCounter,
+                        SilentOpenManager.isSilent(), scannedCount);
                 if (tickCounter < 2) break; // Give the server a couple of ticks to respond
                 if (SilentOpenManager.isContentReady()) {
-                    // Content has arrived — fire the callback, close, advance
+                    int menuId = SilentOpenManager.getExpectedContainerId();
+                    BlockPos pos = SilentOpenManager.getPendingPos();
+                    LOGGER.info("Content ready for pos={} menuId={}, closing", pos, menuId);
+
+                    // Read container contents from the menu while still in silent mode
                     ContainerRepository repo = stashlight.getRepository();
-                    if (repo != null && SilentOpenManager.getPendingPos() != null) {
-                        BlockPos pos = SilentOpenManager.getPendingPos();
+                    if (repo != null && pos != null) {
                         String dim = Util.getDimensionName(client.level);
                         BlockPos canonical = Util.getCanonicalPos(client.level, pos);
                         BlockState blockState = client.level.getBlockState(canonical);
                         String name = blockState.getBlock().getName().getString();
 
-                        SilentOpenManager.onContentReady();
+                        // Extract only container slots (non-player-inventory)
+                        var mc = Minecraft.getInstance();
+                        List<dev.strangequark.stashlight.model.SlotStack> slots = new ArrayList<>();
+                        int containerSize = 0;
+                        if (mc.player != null) {
+                            for (var slot : mc.player.containerMenu.slots) {
+                                if (slot.container == mc.player.getInventory()) continue;
+                                containerSize++;
+                                var stack = slot.getItem();
+                                if (!stack.isEmpty()) {
+                                    slots.add(new dev.strangequark.stashlight.model.SlotStack(slot.index, stack.copy()));
+                                }
+                            }
+                        }
 
-                        // Read content from menu before close
-                        int menuId = SilentOpenManager.getExpectedContainerId();
-                        closeContainer(client, menuId);
-                        scannedCount++;
-                    } else {
-                        // Content ready but no pending pos — just close
-                        int menuId = SilentOpenManager.getExpectedContainerId();
-                        closeContainer(client, menuId);
+                        repo.remove(dim, canonical);
+                        repo.update(dim, canonical, name, containerSize, slots);
                     }
+
+                    // Close container BEFORE finishing silent mode — this prevents
+                    // the chest GUI from popping up when closeContainer triggers setScreen
+                    closeContainer(client, menuId);
+                    scannedCount++;
+
+                    // Now safe to finish
+                    SilentOpenManager.finish();
                     candidateIndex++;
                     transitionTo(State.WAIT_INTERVAL, 0);
                 } else if (tickCounter > 40) {
@@ -154,6 +186,7 @@ public final class VanillaScanner {
                     LOGGER.warn("Timeout waiting for container content, skipping");
                     int menuId = SilentOpenManager.getExpectedContainerId();
                     closeContainer(client, menuId);
+                    SilentOpenManager.finish();
                     candidateIndex++;
                     transitionTo(State.WAIT_INTERVAL, 0);
                 }
@@ -165,12 +198,11 @@ public final class VanillaScanner {
                 }
             }
             case FINISHED -> {
-                String msg = "Scanned " + scannedCount + " containers";
                 if (client.player != null) {
                     client.player.displayClientMessage(
-                            net.minecraft.network.chat.Component.literal(msg), true);
+                            Component.translatable("gui.stashlight.message.scanned", scannedCount), true);
                 }
-                LOGGER.info(msg);
+                LOGGER.info("Scanned {} containers", scannedCount);
                 running = false;
                 state = State.IDLE;
             }
@@ -192,7 +224,8 @@ public final class VanillaScanner {
     }
 
     private void stop(String reason) {
-        LOGGER.info("VanillaScanner stopped: {}", reason);
+        LOGGER.info("stop: reason={}, silent={}, menuId={}", reason,
+                SilentOpenManager.isSilent(), SilentOpenManager.getExpectedContainerId());
         int menuId = SilentOpenManager.getExpectedContainerId();
         if (menuId >= 0) {
             closeContainer(Minecraft.getInstance(), menuId);
@@ -203,7 +236,7 @@ public final class VanillaScanner {
         candidates.clear();
         if (Minecraft.getInstance().player != null) {
             Minecraft.getInstance().player.displayClientMessage(
-                    net.minecraft.network.chat.Component.literal("Scanner: " + reason), true);
+                    Component.translatable("gui.stashlight.message.scannerStop", reason), true);
         }
     }
 
@@ -218,6 +251,7 @@ public final class VanillaScanner {
 
         double reachSq = 4.5 * 4.5; // Vanilla reach ~4.5 blocks
         BlockPos center = player.blockPosition();
+        java.util.HashSet<BlockPos> seen = new java.util.HashSet<>();
 
         // Scan within reach range
         int radius = 5; // ~4.5 blocks rounded up
@@ -232,7 +266,10 @@ public final class VanillaScanner {
                     if (Util.isValidSearchableContainer(state)) {
                         String blockId = state.getBlock().builtInRegistryHolder().key().location().getPath();
                         if (allowedBlocks.contains(blockId)) {
-                            candidates.add(pos);
+                            BlockPos canonical = Util.getCanonicalPos(level, pos);
+                            if (seen.add(canonical)) {
+                                candidates.add(canonical);
+                            }
                         }
                     }
                 }
@@ -241,8 +278,8 @@ public final class VanillaScanner {
     }
 
     private boolean interruptCheck(Minecraft client) {
-        // Re-toggle keybind
-        if (comboKeybind.isPressed()) return true;
+        // Re-toggle ComboKeybind
+        if (comboKeybind != null && comboKeybind.consumeClick()) return true;
         // Player hurt
         if (client.player != null && client.player.hurtTime > 0) return true;
         // Search key pressed
@@ -254,8 +291,10 @@ public final class VanillaScanner {
     }
 
     private void openContainer(Minecraft client, BlockPos pos) {
+        LOGGER.info("openContainer: begin silent at {}, silent={}", pos, SilentOpenManager.isSilent());
         SilentOpenManager.begin(pos, slots -> {
             // Content callback: content will be handled via isContentReady path
+            LOGGER.debug("openContainer: callback fired with {} slots (should not happen)", slots.size());
         });
         client.gameMode.useItemOn(
                 client.player,
@@ -267,8 +306,8 @@ public final class VanillaScanner {
     private void closeContainer(Minecraft client, int containerId) {
         if (containerId < 0) return;
         if (client.player == null) return;
+        LOGGER.info("closeContainer: id={}, silent={}", containerId, SilentOpenManager.isSilent());
         try {
-            // Close via player — this sends ServerboundContainerClosePacket
             client.player.closeContainer();
         } catch (Exception e) {
             LOGGER.warn("Failed to close container {}", containerId, e);

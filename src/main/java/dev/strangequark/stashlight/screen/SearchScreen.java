@@ -63,6 +63,7 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
     private long lastQueryChangeTime = 0;
 
     private List<IndexedItem> lastFilteredItems = new ArrayList<>();
+    private boolean scanRequested = false;
 
     public SearchScreen(ContainerRepository repository) {
         this.repository = repository;
@@ -305,14 +306,15 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
         // --- ASSEMBLE ---
         // Right column: scrollable grid on top, inventory bar below
         FlowLayout rightColumn = (FlowLayout) Containers.verticalFlow(Sizing.fill(100), Sizing.fill(100))
-                .gap(GAP);
+                .gap(GAP)
+                .horizontalAlignment(HorizontalAlignment.CENTER);
 
         // Grid wrapper (top right)
         rightColumn.child(gridWrapper);
 
-        // Inventory bar (bottom right center, v1.3)
+        // Inventory bar (bottom center-right, v1.3)
         if (Config.get().searchInventoryBar().enabled()) {
-            FlowLayout invBarWrapper = (FlowLayout) Containers.verticalFlow(Sizing.fill(100), Sizing.content())
+            FlowLayout invBarWrapper = (FlowLayout) Containers.verticalFlow(Sizing.content(), Sizing.content())
                     .horizontalAlignment(HorizontalAlignment.CENTER)
                     .surface(Surface.outline(GRID_BORDER))
                     .padding(Insets.of(BORDER));
@@ -434,12 +436,24 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
         refreshGrid(searchField.getValue());
     }
 
-    private void requestServerScan() {
-        if (dataSourceMode == DataSourceMode.LOCAL) return;
+    /**
+     * Try to send a scan request. Returns true if the request was actually sent.
+     */
+    private boolean tryRequestServerScan() {
+        if (dataSourceMode == DataSourceMode.LOCAL) return false;
         var stashlight = Stashlight.getInstance();
-        if (stashlight != null && stashlight.isServerModPresent() && stashlight.isServerEnabled()) {
-            stashlight.requestServerScan();
-        }
+        if (stashlight == null || !stashlight.isServerModPresent() || !stashlight.isServerEnabled()) return false;
+
+        // Dedup: skip if ProximityScanner sent a scan request within the last 500ms
+        long lastScan = stashlight.getLastScanRequestTime();
+        if (System.currentTimeMillis() - lastScan < 500) return false;
+
+        stashlight.requestServerScan();
+        return true;
+    }
+
+    private void requestServerScan() {
+        tryRequestServerScan();
     }
 
     private void requestServerScanForceFull() {
@@ -567,6 +581,14 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
             refreshGrid(pendingQuery);
             pendingQuery = null;
         }
+
+        // Retry scan request once when the handshake eventually arrives
+        if (!scanRequested) {
+            if (tryRequestServerScan()) {
+                scanRequested = true;
+            }
+        }
+
         updateSyncTimeLabel();
         super.render(context, mouseX, mouseY, delta);
     }

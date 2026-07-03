@@ -344,21 +344,27 @@ public final class Config {
     public static final class VanillaFallbackConfig {
         private boolean enabled = false;
         private int loopIntervalMillis = 300;
+        private int takeIntervalMillis = 300;
         private int maxContainersPerLoop = 32;
+        private boolean takeOnlyIndexed = true;
         private String blockFilter = "chest,barrel,shulker_box";
         private String scanComboKey = "NONE";
         private String scanComboMods = "";
 
         public boolean enabled() { return enabled; }
         public int loopIntervalMillis() { return clamp(loopIntervalMillis, 100, 5000); }
+        public int takeIntervalMillis() { return clamp(takeIntervalMillis, 100, 5000); }
         public int maxContainersPerLoop() { return clamp(maxContainersPerLoop, 1, 256); }
+        public boolean takeOnlyIndexed() { return takeOnlyIndexed; }
         public String blockFilter() { return blockFilter != null ? blockFilter : "chest,barrel,shulker_box"; }
         public String scanComboKey() { return scanComboKey != null ? scanComboKey : "NONE"; }
         public String scanComboMods() { return scanComboMods != null ? scanComboMods : ""; }
 
         public void setEnabled(boolean v) { this.enabled = v; }
         public void setLoopIntervalMillis(int v) { this.loopIntervalMillis = clamp(v, 100, 5000); }
+        public void setTakeIntervalMillis(int v) { this.takeIntervalMillis = clamp(v, 100, 5000); }
         public void setMaxContainersPerLoop(int v) { this.maxContainersPerLoop = clamp(v, 1, 256); }
+        public void setTakeOnlyIndexed(boolean v) { this.takeOnlyIndexed = v; }
         public void setBlockFilter(String v) { this.blockFilter = v; }
         public void setScanComboKey(String v) { this.scanComboKey = v; }
         public void setScanComboMods(String v) { this.scanComboMods = v; }

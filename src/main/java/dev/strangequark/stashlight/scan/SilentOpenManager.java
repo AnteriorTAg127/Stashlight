@@ -5,6 +5,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +29,8 @@ import java.util.function.Consumer;
  * </ol>
  */
 public final class SilentOpenManager {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger("Stashlight/SilentOpenManager");
 
     private SilentOpenManager() {
     }
@@ -60,6 +64,7 @@ public final class SilentOpenManager {
      *                 when {@link #onContentReady()} is invoked
      */
     public static void begin(BlockPos pos, Consumer<List<SlotStack>> onResult) {
+        LOGGER.debug("begin silent open at {}", pos);
         pendingPos = pos;
         expectedContainerId = -1;
         callback = onResult;
@@ -67,8 +72,10 @@ public final class SilentOpenManager {
     }
 
     /**
-     * Check whether the content is ready by verifying the player's current
-     * container menu has at least one non-empty slot.
+     * Check whether the container content is ready by verifying the player's
+     * current container menu has at least one non-empty slot that is NOT
+     * backed by the player's inventory. This avoids false-positives from
+     * the player's own inventory slots which always have items.
      */
     public static boolean isContentReady() {
         if (!isSilent()) return false;
@@ -77,9 +84,18 @@ public final class SilentOpenManager {
         var menu = mc.player.containerMenu;
         if (menu == null) return false;
         expectedContainerId = menu.containerId;
+        LOGGER.debug("isContentReady: containerId={} slots={}", expectedContainerId, menu.slots.size());
         for (var slot : menu.slots) {
-            if (!slot.getItem().isEmpty()) return true;
+            if (slot.container == mc.player.getInventory()) {
+                LOGGER.trace("  skip player inv slot {}", slot.index);
+                continue;
+            }
+            if (!slot.getItem().isEmpty()) {
+                LOGGER.debug("  non-empty container slot {}: {}", slot.index, slot.getItem());
+                return true;
+            }
         }
+        LOGGER.debug("  no container content yet");
         return false;
     }
 
@@ -94,6 +110,7 @@ public final class SilentOpenManager {
         var mc = Minecraft.getInstance();
         if (mc.player == null || mc.player.containerMenu == null) return;
 
+        LOGGER.debug("onContentReady: reading {} slots", mc.player.containerMenu.slots.size());
         List<SlotStack> slots = new ArrayList<>();
         for (var slot : mc.player.containerMenu.slots) {
             ItemStack stack = slot.getItem();
@@ -111,6 +128,7 @@ public final class SilentOpenManager {
      * Force-clear all state. Used by timeout check or on disconnect.
      */
     public static void finish() {
+        LOGGER.debug("finish silent open");
         pendingPos = null;
         expectedContainerId = -1;
         callback = null;
@@ -127,6 +145,7 @@ public final class SilentOpenManager {
         if (!isSilent()) return -1;
         if (System.currentTimeMillis() < deadlineMs) return -1;
 
+        LOGGER.warn("silent open timed out for container {}", expectedContainerId);
         int containerId = expectedContainerId;
         finish();
         return containerId >= 0 ? containerId : -1;

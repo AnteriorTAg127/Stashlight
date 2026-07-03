@@ -154,6 +154,26 @@ public class ContainerRepository {
         }
     }
 
+    /**
+     * Remove a container from both LOCAL_MAP and SERVER_MAP when its block
+     * state changes to a non-container (i.e. destroyed). Fast-path: if the
+     * new state is still a valid searchable container, this is a no-op.
+     * Called from the setBlockState mixin on every block change — cheap when
+     * the position is not in either cache.
+     */
+    public void removeIfBroken(String dimension, BlockPos pos, net.minecraft.world.level.block.state.BlockState newState) {
+        if (newState != null && dev.strangequark.stashlight.util.Util.isValidSearchableContainer(newState)) {
+            return; // Still a container, not a break
+        }
+        synchronized (lock()) {
+            boolean inLocal = LOCAL_MAP.containsKey(dimension) && LOCAL_MAP.get(dimension).containsKey(pos);
+            boolean inServer = SERVER_MAP.containsKey(dimension) && SERVER_MAP.get(dimension).containsKey(pos);
+            if (!inLocal && !inServer) return;
+        }
+        remove(dimension, pos);
+        removeServer(dimension, pos);
+    }
+
     public void clearServerData() {
         synchronized (lock()) {
             if (SERVER_MAP.isEmpty()) return;
