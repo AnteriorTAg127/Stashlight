@@ -337,6 +337,35 @@ public class ContainerRepository {
         }
     }
 
+    /**
+     * Look up the top-level item stack at the given container slot. Used when
+     * taking nested items so the client can request the server to remove the
+     * actual shulker box / bundle rather than the item inside it.
+     * Searches local cache first, then server cache.
+     */
+    @Nullable
+    public ItemStack getTopLevelStack(String dimension, BlockPos pos, int slot) {
+        synchronized (lock()) {
+            ContainerSnapshot snapshot = getSnapshot(dimension, pos, LOCAL_MAP);
+            if (snapshot == null) {
+                snapshot = getSnapshot(dimension, pos, SERVER_MAP);
+            }
+            if (snapshot == null) return null;
+            for (SlotStack slotStack : snapshot.slotStacks()) {
+                if (slotStack.slot() == slot && slotStack.stack() != null && !slotStack.stack().isEmpty()) {
+                    return slotStack.stack().copy();
+                }
+            }
+        }
+        return null;
+    }
+
+    private static ContainerSnapshot getSnapshot(String dimension, BlockPos pos,
+                                                  Map<String, Map<BlockPos, ContainerSnapshot>> map) {
+        Map<BlockPos, ContainerSnapshot> dimMap = map.get(dimension);
+        return dimMap != null ? dimMap.get(pos) : null;
+    }
+
     public List<IndexedItem> getSearchIndex(DataSourceMode mode) {
         synchronized (lock()) {
             if (mode == DataSourceMode.MERGED) {

@@ -3,6 +3,8 @@ package dev.strangequark.stashlight.scan;
 import dev.strangequark.stashlight.config.Config;
 import dev.strangequark.stashlight.scan.SilentOpenManager;
 import dev.strangequark.stashlight.model.DisplayItem;
+import dev.strangequark.stashlight.model.SlotStack;
+import dev.strangequark.stashlight.util.NestedContainerExpander;
 import dev.strangequark.stashlight.util.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
@@ -10,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -20,13 +23,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
 import dev.strangequark.stashlight.model.DataSourceMode;
-import dev.strangequark.stashlight.model.SlotStack;
 import dev.strangequark.stashlight.repository.ContainerRepository;
 import dev.strangequark.stashlight.screen.SearchScreen;
 
@@ -209,16 +212,119 @@ public final class VanillaTaker {
         }
     }
 
+    private record BoxSlot(int slotId, int innerCount) {
+    }
+
     private int takeFromOpenContainer(Minecraft client, ItemStack target, int maxCount) {
         var player = client.player;
         if (player == null) return 0;
 
         var menu = player.containerMenu;
         var slots = menu.slots;
+        boolean boxMode = Config.get().remoteTake().takeContainingBoxEnabled();
+
+        int taken = 0;
+        int remaining = maxCount;
+
+        // Phase 1: prefer whole nested boxes (shulker boxes, bundles, etc.)
+        if (boxMode && remaining > 0) {
+            List<BoxSlot> boxSlots = new ArrayList<>();
+            for (int i = 0; i < slots.size(); i++) {
+                var slot = slots.get(i);
+                if (slot.container == player.getInventory()) continue;
+                ItemStack stack = slot.getItem();
+                if (stack.isEmpty()) continue;
+                int inner = countNestedTarget(stack, target);
+                if (inner > 0) {
+                    boxSlots.add(new BoxSlot(i, inner));
+                }
+            }
+
+            boxSlots.sort(Comparator.comparingInt((BoxSlot b) -> b.innerCount).reversed());
+            List<BoxSlot> skipped = new ArrayList<>();
+            for (BoxSlot box : boxSlots) {
+                if (remaining <= 0) break;
+                if (box.innerCount <= remaining) {
+                    if (takeWholeBox(client, menu, box.slotId)) {
+                        taken += box.innerCount;
+                        remaining -= box.innerCount;
+                    }
+                } else {
+                    skipped.add(box);
+                }
+            }
+
+            if (remaining > 0 && !skipped.isEmpty()) {
+                skipped.sort(Comparator.comparingInt(b -> b.innerCount));
+                BoxSlot box = skipped.get(0);
+                if (takeWholeBox(client, menu, box.slotId)) {
+                    taken += box.innerCount;
+                    remaining -= box.innerCount;
+                }
+            }
+        }
+
+        // Phase 2: fill the rest with loose items.
+        if (remaining > 0) {
+            taken += takeLooseItems(client, target, remaining);
+        }
+        return taken;
+    }
+
+    /**
+     * Count how many of {@code target} are nested inside {@code stack}
+     * (e.g. inside a shulker box or bundle).
+     */
+    private static int countNestedTarget(ItemStack stack, ItemStack target) {
+        int count = 0;
+        for (NestedContainerExpander.SlotPath path : NestedContainerExpander.expand(new SlotStack(-1, stack), 3)) {
+            if (path.path().slots().size() <= 1) continue; // skip the container itself
+            ItemStack inner = path.slotStack().stack();
+            if (ItemStack.isSameItemSameComponents(inner, target)) {
+                count += inner.getCount();
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Shift-click a whole nested container into the player's inventory.
+     * If the inventory is full and drop-on-full is enabled, drop the container
+     * onto the ground. Returns {@code true} if the slot was emptied.
+     */
+    private static boolean takeWholeBox(Minecraft client, AbstractContainerMenu menu, int slotId) {
+        var player = client.player;
+        if (player == null) return false;
+        var slot = menu.getSlot(slotId);
+        ItemStack before = slot.getItem().copy();
+        if (before.isEmpty()) return false;
+
+        client.gameMode.handleInventoryMouseClick(
+                menu.containerId, slotId, 0, ClickType.QUICK_MOVE, player);
+
+        ItemStack after = slot.getItem();
+        boolean moved = after.isEmpty() || after.getCount() < before.getCount();
+        if (moved) return true;
+
+        if (Config.get().remoteTake().dropOnFullEnabled()) {
+            dropFromSlot(client, menu.containerId, slotId, 1, before.getCount());
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Take loose (non-nested) items from the open container.
+     * Mirrors the pre-v1.3 logic: shift-click full stacks and cursor-split partials,
+     * with optional drop-on-full.
+     */
+    private int takeLooseItems(Minecraft client, ItemStack target, int maxCount) {
+        var player = client.player;
+        if (player == null) return 0;
+
+        var menu = player.containerMenu;
+        var slots = menu.slots;
         boolean dropOnFull = Config.get().remoteTake().dropOnFullEnabled();
-        // Measure actual take by inventory delta, so the reported count stays
-        // correct even when shift-click transfers partially or the server
-        // rejects a click. Decouples counting from click-success assumptions.
         int before = countInInventory(player, target);
         int dropped = 0;
 
@@ -236,7 +342,6 @@ public final class VanillaTaker {
             int have = slotStack.getCount();
 
             if (stillNeed >= have) {
-                // Take entire stack via shift-click
                 int invBefore = countInInventory(player, target);
                 client.gameMode.handleInventoryMouseClick(
                         menu.containerId, i, 0, ClickType.QUICK_MOVE, player);
@@ -251,27 +356,20 @@ public final class VanillaTaker {
                     }
                 }
             } else {
-                // Partial stack: cursor-split
-                // 1. Pick up entire stack
                 client.gameMode.handleInventoryMouseClick(
                         menu.containerId, i, 0, ClickType.PICKUP, player);
-                // 2. Right-click `stillNeed` times into empty main-inventory slots (places 1 each)
                 int placed = 0;
                 for (int j = 0; j < slots.size() && placed < stillNeed; j++) {
                     var invSlot = slots.get(j);
                     if (invSlot.container != player.getInventory()) continue;
-                    // Only target main inventory + hotbar (Inventory index 0..35),
-                    // excluding armor (36-39), offhand (40), and crafting slots.
                     if (invSlot.index >= 36) continue;
                     if (!invSlot.getItem().isEmpty()) continue;
                     client.gameMode.handleInventoryMouseClick(
                             menu.containerId, j, 1, ClickType.PICKUP, player);
                     placed++;
                 }
-                // 3. Put the remainder back
                 client.gameMode.handleInventoryMouseClick(
                         menu.containerId, i, 0, ClickType.PICKUP, player);
-                // 4. If inventory was full and drop is enabled, drop the unplaced portion
                 if (placed < stillNeed && dropOnFull) {
                     int toDrop = stillNeed - placed;
                     dropFromSlot(client, menu.containerId, i, toDrop, have - placed);

@@ -84,6 +84,7 @@
   "gui.stashlight.label.remoteTake": "Remote Take",
   "gui.stashlight.label.defaultQuantity": "Default Quantity",
   "gui.stashlight.label.keepScreenOnTake": "Keep screen on take",
+  "gui.stashlight.label.takeContainingBox": "Prefer whole nested box",
 
   "gui.stashlight.take.title": "Take %s",
   "gui.stashlight.take.confirm": "Take",

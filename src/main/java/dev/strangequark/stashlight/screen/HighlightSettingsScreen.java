@@ -188,6 +188,8 @@ public final class HighlightSettingsScreen extends BaseOwoScreen<FlowLayout> {
                     rt.enabled(), v -> { rt.setEnabled(v); Config.save(); }));
             card.child(makeSlider("gui.stashlight.label.defaultQuantity",
                     rt.defaultQuantity(), 1, 64, v -> { rt.setDefaultQuantity(v); Config.save(); }));
+            card.child(makeCheckbox("gui.stashlight.label.takeContainingBox",
+                    rt.takeContainingBoxEnabled(), v -> { rt.setTakeContainingBoxEnabled(v); Config.save(); }));
         }));
 
         ScrollContainer<FlowLayout> scroll = Containers

@@ -84,6 +84,7 @@
   "gui.stashlight.label.remoteTake": "远程取物",
   "gui.stashlight.label.defaultQuantity": "默认数量",
   "gui.stashlight.label.keepScreenOnTake": "取物时保持界面",
+  "gui.stashlight.label.takeContainingBox": "优先取出整盒（潜影盒/Bundle）",
 
   "gui.stashlight.take.title": "拿取 %s",
   "gui.stashlight.take.confirm": "拿取",

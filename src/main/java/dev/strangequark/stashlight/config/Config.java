@@ -393,16 +393,19 @@ public final class Config {
         private int defaultQuantity = 1;
         private boolean dropOnFullEnabled = true;
         private boolean keepScreenOnTake = true;
+        private boolean takeContainingBoxEnabled = true;
 
         public boolean enabled() { return enabled; }
         public int defaultQuantity() { return clamp(defaultQuantity, 1, 64); }
         public boolean dropOnFullEnabled() { return dropOnFullEnabled; }
         public boolean keepScreenOnTake() { return keepScreenOnTake; }
+        public boolean takeContainingBoxEnabled() { return takeContainingBoxEnabled; }
 
         public void setEnabled(boolean v) { this.enabled = v; }
         public void setDefaultQuantity(int v) { this.defaultQuantity = clamp(v, 1, 64); }
         public void setDropOnFullEnabled(boolean v) { this.dropOnFullEnabled = v; }
         public void setKeepScreenOnTake(boolean v) { this.keepScreenOnTake = v; }
+        public void setTakeContainingBoxEnabled(boolean v) { this.takeContainingBoxEnabled = v; }
 
         private static int clamp(int value, int min, int max) {
             return Math.max(min, Math.min(value, max));
