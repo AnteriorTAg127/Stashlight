@@ -5,6 +5,7 @@ import dev.strangequark.stashlight.config.Config;
 import dev.strangequark.stashlight.gui.EnchantFilterPanel;
 import dev.strangequark.stashlight.gui.InventoryBar;
 import dev.strangequark.stashlight.gui.ItemGrid;
+import dev.strangequark.stashlight.gui.TakeQueuePanel;
 import dev.strangequark.stashlight.logic.filter.*;
 import dev.strangequark.stashlight.logic.sort.SortManager;
 import dev.strangequark.stashlight.model.DataSourceMode;
@@ -14,6 +15,7 @@ import dev.strangequark.stashlight.model.IndexedItem;
 import dev.strangequark.stashlight.model.StackKey;
 import dev.strangequark.stashlight.render.HighlightManager;
 import dev.strangequark.stashlight.repository.ContainerRepository;
+import dev.strangequark.stashlight.scan.VanillaTaker;
 import dev.strangequark.stashlight.util.Util;
 import com.mojang.blaze3d.platform.InputConstants;
 import io.wispforest.owo.ui.base.BaseOwoScreen;
@@ -42,6 +44,7 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
     private FlowLayout mainWindow;
     private TextBoxComponent searchField;
     private ItemGrid itemGrid;
+    private TakeQueuePanel queuePanel;
 
     private final FilterManager filterManager = new FilterManager();
     private final SortManager sortManager;
@@ -324,14 +327,35 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
         // Grid wrapper (top right)
         rightColumn.child(gridWrapper);
 
-        // Inventory bar (bottom center-right, v1.3)
-        if (Config.get().searchInventoryBar().enabled()) {
-            FlowLayout invBarWrapper = (FlowLayout) Containers.verticalFlow(Sizing.content(), Sizing.content())
-                    .horizontalAlignment(HorizontalAlignment.CENTER)
+        // Bottom row: inventory bar + take queue (depending on config)
+        boolean showInvBar = Config.get().searchInventoryBar().enabled();
+        boolean showQueue = Config.get().takeQueue().enabled();
+        FlowLayout bottomRow = null;
+
+        if (showInvBar || showQueue) {
+            bottomRow = (FlowLayout) Containers.horizontalFlow(Sizing.fill(100), Sizing.content())
+                    .gap(GAP)
+                    .verticalAlignment(VerticalAlignment.TOP);
+        }
+
+        if (showInvBar) {
+            FlowLayout invBarWrapper = (FlowLayout) Containers.verticalFlow(
+                            showQueue ? Sizing.content() : Sizing.fill(100),
+                            Sizing.content())
+                    .horizontalAlignment(HorizontalAlignment.LEFT)
                     .surface(Surface.outline(GRID_BORDER))
                     .padding(Insets.of(BORDER));
             invBarWrapper.child(new InventoryBar());
-            rightColumn.child(invBarWrapper);
+            bottomRow.child(invBarWrapper);
+        }
+
+        if (showQueue) {
+            bottomRow.child(buildQueueSection(showInvBar));
+        }
+
+        if (bottomRow != null) {
+            bottomRow.horizontalAlignment(showQueue ? HorizontalAlignment.CENTER : HorizontalAlignment.LEFT);
+            rightColumn.child(bottomRow);
         }
 
         // Content area: enchant panel on left, right column on right
@@ -344,6 +368,60 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
         updateModeUi();
         updateSourceButton();
         requestServerScan();
+    }
+
+    private FlowLayout buildQueueSection(boolean inventoryBarVisible) {
+        var stashlight = Stashlight.getInstance();
+        var takeQueue = stashlight != null ? stashlight.getTakeQueue() : null;
+        this.queuePanel = new TakeQueuePanel(takeQueue);
+        this.queuePanel.setColumns(inventoryBarVisible ? 4 : 1);
+
+        FlowLayout buttons = (FlowLayout) Containers.horizontalFlow(Sizing.content(), Sizing.fixed(COMPONENT_HEIGHT))
+                .gap(GAP)
+                .verticalAlignment(VerticalAlignment.CENTER);
+
+        buttons.child(Components.button(
+                Component.translatable("gui.stashlight.queue.takeAll"),
+                b -> processQueue()
+        ).sizing(Sizing.fixed(70), Sizing.fixed(COMPONENT_HEIGHT)));
+
+        buttons.child(Components.button(
+                Component.translatable("gui.stashlight.queue.clear"),
+                b -> {
+                    if (takeQueue != null) takeQueue.clear();
+                    if (queuePanel != null) queuePanel.refresh();
+                }
+        ).sizing(Sizing.fixed(70), Sizing.fixed(COMPONENT_HEIGHT)));
+
+        FlowLayout wrapper = (FlowLayout) Containers.verticalFlow(Sizing.content(), Sizing.content())
+                .gap(GAP)
+                .horizontalAlignment(HorizontalAlignment.CENTER);
+        wrapper.child(queuePanel);
+        wrapper.child(buttons);
+        return wrapper;
+    }
+
+    private void processQueue() {
+        var mc = Minecraft.getInstance();
+        var stashlight = Stashlight.getInstance();
+        if (stashlight == null) return;
+        var takeQueue = stashlight.getTakeQueue();
+        if (takeQueue == null || takeQueue.isEmpty()) return;
+
+        java.util.List<dev.strangequark.stashlight.take.TakeQueueEntry> copy =
+                new java.util.ArrayList<>(takeQueue.entries());
+        takeQueue.clear();
+        if (queuePanel != null) queuePanel.refresh();
+
+        boolean modded = stashlight.isModdedTakeAvailable();
+        if (modded) {
+            stashlight.getTakeClient().startQueue(copy);
+            if (!Config.get().remoteTake().keepScreenOnTake()) {
+                mc.setScreen(null);
+            }
+        } else {
+            VanillaTaker.startQueue(copy);
+        }
     }
 
     private void refreshGrid(String query) {
@@ -583,6 +661,12 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
     public void refreshFromServer() {
         if (this.searchField != null) {
             refreshGrid(this.searchField.getValue());
+        }
+    }
+
+    public void refreshQueuePanel() {
+        if (this.queuePanel != null) {
+            this.queuePanel.refresh();
         }
     }
 

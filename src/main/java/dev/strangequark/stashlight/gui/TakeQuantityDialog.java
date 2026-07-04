@@ -104,15 +104,22 @@ public final class TakeQuantityDialog extends BaseOwoScreen<FlowLayout> {
         rootComponent.child(btnRow1);
         rootComponent.child(btnRow2);
 
-        // Confirm / Cancel
+        // Take now / Add to queue / Cancel
         FlowLayout actionRow = (FlowLayout) Containers.horizontalFlow(Sizing.content(), Sizing.content())
                 .gap(GAP)
                 .horizontalAlignment(HorizontalAlignment.CENTER);
 
         actionRow.child(Components.button(
-                Component.translatable("gui.stashlight.take.confirm"),
-                b -> confirmTake()
-        ).sizing(Sizing.fixed(60), Sizing.fixed(COMPONENT_HEIGHT)));
+                Component.translatable("gui.stashlight.take.takeNow"),
+                b -> takeNow()
+        ).sizing(Sizing.fixed(70), Sizing.fixed(COMPONENT_HEIGHT)));
+
+        if (Config.get().takeQueue().enabled()) {
+            actionRow.child(Components.button(
+                    Component.translatable("gui.stashlight.take.addToQueue"),
+                    b -> addToQueue()
+            ).sizing(Sizing.fixed(80), Sizing.fixed(COMPONENT_HEIGHT)));
+        }
 
         actionRow.child(Components.button(
                 Component.translatable("gui.stashlight.take.cancel"),
@@ -148,7 +155,7 @@ public final class TakeQuantityDialog extends BaseOwoScreen<FlowLayout> {
         }
     }
 
-    private void confirmTake() {
+    private void takeNow() {
         int qty = Math.max(1, Math.min(quantity, maxQty));
 
         Minecraft mc = Minecraft.getInstance();
@@ -166,6 +173,35 @@ public final class TakeQuantityDialog extends BaseOwoScreen<FlowLayout> {
         if (stashlight != null) {
             stashlight.getTakeClient().startTake(target, qty);
         }
+    }
+
+    private void addToQueue() {
+        var stashlight = dev.strangequark.stashlight.Stashlight.getInstance();
+        if (stashlight == null) {
+            onClose();
+            return;
+        }
+        var takeQueue = stashlight.getTakeQueue();
+        if (takeQueue == null) {
+            onClose();
+            return;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+        if (takeQueue.isFull()) {
+            if (mc.player != null) {
+                mc.player.displayClientMessage(
+                        Component.translatable("gui.stashlight.message.queueFull"), true);
+            }
+            return;
+        }
+
+        int qty = Math.max(1, Math.min(quantity, maxQty));
+        takeQueue.add(target, qty);
+        if (parent instanceof dev.strangequark.stashlight.screen.SearchScreen searchScreen) {
+            searchScreen.refreshQueuePanel();
+        }
+        onClose();
     }
 
     @Override

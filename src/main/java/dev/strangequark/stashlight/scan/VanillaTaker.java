@@ -4,6 +4,7 @@ import dev.strangequark.stashlight.config.Config;
 import dev.strangequark.stashlight.scan.SilentOpenManager;
 import dev.strangequark.stashlight.model.DisplayItem;
 import dev.strangequark.stashlight.model.SlotStack;
+import dev.strangequark.stashlight.take.TakeQueueEntry;
 import dev.strangequark.stashlight.util.NestedContainerExpander;
 import dev.strangequark.stashlight.util.Util;
 import net.minecraft.client.Minecraft;
@@ -62,6 +63,10 @@ public final class VanillaTaker {
     private ContainerRepository repository;
     private int restorePendingTicks = 0;
 
+    private final List<TakeQueueEntry> queuedEntries = new ArrayList<>();
+    private int queueEntryIndex = -1;
+    private boolean queueMode = false;
+
     public VanillaTaker() {
         INSTANCE = this;
     }
@@ -87,6 +92,10 @@ public final class VanillaTaker {
         // Close any open screen
         mc.setScreen(null);
 
+        queuedEntries.clear();
+        queueEntryIndex = -1;
+        queueMode = false;
+
         targetStack = item.stack();
         totalWanted = count;
         remaining = count;
@@ -95,6 +104,86 @@ public final class VanillaTaker {
         tickCounter = 0;
 
         state = State.BUILD_CANDIDATES;
+    }
+
+    /**
+     * Initiate a vanilla-fallback queue take operation.
+     */
+    public static void startQueue(List<TakeQueueEntry> entries) {
+        if (INSTANCE == null) {
+            INSTANCE = new VanillaTaker();
+        }
+        INSTANCE.beginQueue(entries);
+    }
+
+    private void beginQueue(List<TakeQueueEntry> entries) {
+        var mc = Minecraft.getInstance();
+        if (mc.level == null || mc.player == null || repository == null) return;
+
+        mc.setScreen(null);
+
+        queuedEntries.clear();
+        for (TakeQueueEntry entry : entries) {
+            if (resolveEntry(entry).isPresent()) {
+                queuedEntries.add(entry);
+            }
+        }
+
+        if (queuedEntries.isEmpty()) {
+            if (mc.player != null) {
+                mc.player.displayClientMessage(
+                        Component.translatable("gui.stashlight.message.queueNothingReachable"), true);
+            }
+            restorePendingTicks = 5;
+            return;
+        }
+
+        queueMode = true;
+        queueEntryIndex = 0;
+        startQueueEntry(0);
+    }
+
+    private java.util.Optional<DisplayItem> resolveEntry(TakeQueueEntry entry) {
+        var stashlight = dev.strangequark.stashlight.Stashlight.getInstance();
+        if (stashlight == null || stashlight.getTakeQueue() == null) {
+            return java.util.Optional.empty();
+        }
+        return stashlight.getTakeQueue().resolveReachable(entry);
+    }
+
+    private void startQueueEntry(int index) {
+        this.queueEntryIndex = index;
+        if (index >= queuedEntries.size()) {
+            finishQueue();
+            return;
+        }
+
+        var resolved = resolveEntry(queuedEntries.get(index));
+        if (resolved.isEmpty()) {
+            startQueueEntry(index + 1);
+            return;
+        }
+
+        targetStack = resolved.get().stack();
+        totalWanted = queuedEntries.get(index).quantity();
+        remaining = totalWanted;
+        takenSoFar = 0;
+        candidateIndex = 0;
+        tickCounter = 0;
+        state = State.BUILD_CANDIDATES;
+    }
+
+    private void finishQueue() {
+        queuedEntries.clear();
+        queueEntryIndex = -1;
+        queueMode = false;
+        state = State.IDLE;
+        restorePendingTicks = 5;
+        var mc = Minecraft.getInstance();
+        if (mc.player != null) {
+            mc.player.displayClientMessage(
+                    Component.translatable("gui.stashlight.message.queueDone"), true);
+        }
     }
 
     /**
@@ -121,7 +210,11 @@ public final class VanillaTaker {
             case BUILD_CANDIDATES -> {
                 candidates = buildReachableContainers(client);
                 if (candidates.isEmpty()) {
-                    finish("No containers in range");
+                    if (queueMode) {
+                        startQueueEntry(queueEntryIndex + 1);
+                    } else {
+                        finish("No containers in range");
+                    }
                     return;
                 }
                 candidateIndex = 0;
@@ -206,8 +299,12 @@ public final class VanillaTaker {
                     client.player.displayClientMessage(msg, true);
                 }
                 LOGGER.info("VanillaTaker done: {} taken of {} wanted", takenSoFar, totalWanted);
-                state = State.IDLE;
-                restorePendingTicks = 5;
+                if (queueMode) {
+                    startQueueEntry(queueEntryIndex + 1);
+                } else {
+                    state = State.IDLE;
+                    restorePendingTicks = 5;
+                }
             }
         }
     }
@@ -513,6 +610,9 @@ public final class VanillaTaker {
         int menuId = SilentOpenManager.getExpectedContainerId();
         if (menuId >= 0) closeContainer(Minecraft.getInstance(), menuId);
         SilentOpenManager.finish();
+        queuedEntries.clear();
+        queueEntryIndex = -1;
+        queueMode = false;
         state = State.IDLE;
         restorePendingTicks = 5;
         if (Minecraft.getInstance().player != null) {

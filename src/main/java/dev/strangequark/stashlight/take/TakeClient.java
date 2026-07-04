@@ -5,6 +5,7 @@ import dev.strangequark.stashlight.config.Config;
 import dev.strangequark.stashlight.model.DisplayItem;
 import dev.strangequark.stashlight.model.IndexedItem;
 import dev.strangequark.stashlight.model.LocatePath;
+import dev.strangequark.stashlight.take.TakeQueueEntry;
 import dev.strangequark.stashlight.net.TakeItemRequestPayload;
 import dev.strangequark.stashlight.net.TakeItemResponsePayload;
 import dev.strangequark.stashlight.net.TakeResult;
@@ -40,6 +41,10 @@ public final class TakeClient {
     private int totalWanted = 0;
     private int expectedResponses = 0;
     private int completedResponses = 0;
+
+    private final List<TakeQueueEntry> queuedEntries = new ArrayList<>();
+    private int queueIndex = -1;
+    private Runnable onAllDone;
 
     private record PlannedTake(BlockPos pos, int slot, ItemStack target, int requestCount,
                                boolean box, int contentCount) {
@@ -85,14 +90,30 @@ public final class TakeClient {
             mc.setScreen(null);
         }
 
+        executeTake(item, count, () -> {
+            var st = Stashlight.getInstance();
+            if (st != null) st.requestServerScan();
+        });
+    }
+
+    /**
+     * Execute a single take operation. {@code onDone} is called once all pending
+     * responses for this operation have been received.
+     */
+    private void executeTake(DisplayItem item, int count, Runnable onDone) {
+        this.onAllDone = onDone;
         totalTaken = 0;
         totalWanted = count;
         expectedResponses = 0;
         completedResponses = 0;
 
         List<PlannedTake> plan = planTakes(item, count);
-        if (plan.isEmpty()) return;
+        if (plan.isEmpty()) {
+            onDone.run();
+            return;
+        }
 
+        Minecraft mc = Minecraft.getInstance();
         for (PlannedTake op : plan) {
             int nonce = nonceGen.getAndIncrement();
             expectedResponses++;
@@ -104,19 +125,15 @@ public final class TakeClient {
                             : response.taken();
                     totalTaken += gained;
                     showProgress(totalTaken, totalWanted);
-                } else {
+                } else if (mc.player != null) {
                     mc.player.displayClientMessage(
                             Component.translatable("gui.stashlight.message.takeFailed",
                                     TakeResult.values()[response.result()].name()),
                             true);
                 }
                 completedResponses++;
-                // All take responses received — trigger an incremental scan so the
-                // server pushes back the post-take container contents and the
-                // search screen refreshes (see Stashlight.handleContainerUpdate).
                 if (completedResponses >= expectedResponses && expectedResponses > 0) {
-                    var st = Stashlight.getInstance();
-                    if (st != null) st.requestServerScan();
+                    if (onAllDone != null) onAllDone.run();
                 }
             });
 
@@ -255,6 +272,82 @@ public final class TakeClient {
     }
 
     /**
+     * Process a list of queue entries sequentially. Unreachable or resolved-empty
+     * entries are skipped without stopping the queue.
+     */
+    public void startQueue(List<TakeQueueEntry> entries) {
+        var stashlight = Stashlight.getInstance();
+        if (stashlight == null) return;
+
+        if (!stashlight.isModdedTakeAvailable()) {
+            VanillaTaker.startQueue(entries);
+            return;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return;
+
+        if (!Config.get().remoteTake().keepScreenOnTake()) {
+            mc.setScreen(null);
+        }
+
+        queuedEntries.clear();
+        TakeQueue queue = stashlight.getTakeQueue();
+        for (TakeQueueEntry entry : entries) {
+            if (queue.resolveReachable(entry).isPresent()) {
+                queuedEntries.add(entry);
+            }
+        }
+
+        if (queuedEntries.isEmpty()) {
+            if (mc.player != null) {
+                mc.player.displayClientMessage(
+                        Component.translatable("gui.stashlight.message.queueNothingReachable"), true);
+            }
+            return;
+        }
+
+        queueIndex = 0;
+        processNextQueueEntry();
+    }
+
+    private void processNextQueueEntry() {
+        var stashlight = Stashlight.getInstance();
+        if (stashlight == null || queueIndex >= queuedEntries.size()) {
+            onQueueFinished();
+            return;
+        }
+
+        TakeQueue queue = stashlight.getTakeQueue();
+        TakeQueueEntry entry = queuedEntries.get(queueIndex);
+        var resolved = queue.resolveReachable(entry);
+        if (resolved.isEmpty()) {
+            queueIndex++;
+            processNextQueueEntry();
+            return;
+        }
+
+        executeTake(resolved.get(), entry.quantity(), this::onQueueEntryDone);
+    }
+
+    private void onQueueEntryDone() {
+        queueIndex++;
+        processNextQueueEntry();
+    }
+
+    private void onQueueFinished() {
+        queuedEntries.clear();
+        queueIndex = -1;
+        var stashlight = Stashlight.getInstance();
+        if (stashlight != null) stashlight.requestServerScan();
+        var mc = Minecraft.getInstance();
+        if (mc.player != null) {
+            mc.player.displayClientMessage(
+                    Component.translatable("gui.stashlight.message.queueDone"), true);
+        }
+    }
+
+    /**
      * Reset state (e.g. on disconnect).
      */
     public void reset() {
@@ -263,5 +356,8 @@ public final class TakeClient {
         totalWanted = 0;
         expectedResponses = 0;
         completedResponses = 0;
+        queuedEntries.clear();
+        queueIndex = -1;
+        onAllDone = null;
     }
 }

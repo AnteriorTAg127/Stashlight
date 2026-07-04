@@ -81,6 +81,9 @@
 
   "gui.stashlight.label.liveSlotHighlight": "实时槽位高亮",
   "gui.stashlight.label.inventoryBar": "背包栏",
+  "gui.stashlight.label.takeQueue": "拿取队列",
+  "gui.stashlight.label.queueCapacity": "队列容量",
+
   "gui.stashlight.label.remoteTake": "远程取物",
   "gui.stashlight.label.defaultQuantity": "默认数量",
   "gui.stashlight.label.keepScreenOnTake": "取物时保持界面",
@@ -89,6 +92,18 @@
   "gui.stashlight.take.title": "拿取 %s",
   "gui.stashlight.take.confirm": "拿取",
   "gui.stashlight.take.cancel": "取消",
+  "gui.stashlight.take.takeNow": "立即拿取",
+  "gui.stashlight.take.addToQueue": "加入队列",
+
+  "gui.stashlight.queue.takeAll": "全部拿取",
+  "gui.stashlight.queue.clear": "清空队列",
+
+  "gui.stashlight.message.queueFull": "队列已满",
+  "gui.stashlight.message.queueUnreachable": "超出范围",
+  "gui.stashlight.message.queueNothingReachable": "队列中没有可到达的物品",
+  "gui.stashlight.message.queueDone": "队列处理完成",
+
+  "gui.stashlight.tooltip.queueRightClickRemove": "右键点击移除",
 
   "gui.stashlight.tooltip.takeHints": "左键：拿取 | 右键：高亮 | Shift+左键：全拿",
   "gui.stashlight.tooltip.highlightHints": "左键：高亮 | 右键：高亮",

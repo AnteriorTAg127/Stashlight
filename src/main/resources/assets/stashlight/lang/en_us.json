@@ -81,6 +81,9 @@
 
   "gui.stashlight.label.liveSlotHighlight": "Live Slot Highlight",
   "gui.stashlight.label.inventoryBar": "Inventory Bar",
+  "gui.stashlight.label.takeQueue": "Take Queue",
+  "gui.stashlight.label.queueCapacity": "Queue Capacity",
+
   "gui.stashlight.label.remoteTake": "Remote Take",
   "gui.stashlight.label.defaultQuantity": "Default Quantity",
   "gui.stashlight.label.keepScreenOnTake": "Keep screen on take",
@@ -89,6 +92,18 @@
   "gui.stashlight.take.title": "Take %s",
   "gui.stashlight.take.confirm": "Take",
   "gui.stashlight.take.cancel": "Cancel",
+  "gui.stashlight.take.takeNow": "Take Now",
+  "gui.stashlight.take.addToQueue": "Add to Queue",
+
+  "gui.stashlight.queue.takeAll": "Take All",
+  "gui.stashlight.queue.clear": "Clear Queue",
+
+  "gui.stashlight.message.queueFull": "Queue is full",
+  "gui.stashlight.message.queueUnreachable": "Out of range",
+  "gui.stashlight.message.queueNothingReachable": "No reachable items in queue",
+  "gui.stashlight.message.queueDone": "Queue finished",
+
+  "gui.stashlight.tooltip.queueRightClickRemove": "Right-click to remove",
 
   "gui.stashlight.tooltip.takeHints": "LMB: Take | RMB: Highlight | Shift+LMB: Take all",
   "gui.stashlight.tooltip.highlightHints": "LMB: Highlight | RMB: Highlight",

@@ -35,6 +35,7 @@ public final class Config {
     private VanillaFallbackConfig vanillaFallback = new VanillaFallbackConfig();
     private LiveSlotHighlightConfig liveSlotHighlight = new LiveSlotHighlightConfig();
     private SearchInventoryBarConfig searchInventoryBar = new SearchInventoryBarConfig();
+    private TakeQueueConfig takeQueue = new TakeQueueConfig();
     private RemoteTakeConfig remoteTake = new RemoteTakeConfig();
 
     /* ---------------- runtime-only state ---------------- */
@@ -110,6 +111,11 @@ public final class Config {
         return searchInventoryBar;
     }
 
+    public TakeQueueConfig takeQueue() {
+        if (takeQueue == null) takeQueue = new TakeQueueConfig();
+        return takeQueue;
+    }
+
     public RemoteTakeConfig remoteTake() {
         if (remoteTake == null) remoteTake = new RemoteTakeConfig();
         return remoteTake;
@@ -162,6 +168,7 @@ public final class Config {
         if (this.vanillaFallback == null) this.vanillaFallback = new VanillaFallbackConfig();
         if (this.liveSlotHighlight == null) this.liveSlotHighlight = new LiveSlotHighlightConfig();
         if (this.searchInventoryBar == null) this.searchInventoryBar = new SearchInventoryBarConfig();
+        if (this.takeQueue == null) this.takeQueue = new TakeQueueConfig();
         if (this.remoteTake == null) this.remoteTake = new RemoteTakeConfig();
         this.dataSource.validate();
     }
@@ -386,6 +393,21 @@ public final class Config {
 
         public boolean enabled() { return enabled; }
         public void setEnabled(boolean v) { this.enabled = v; }
+    }
+
+    public static final class TakeQueueConfig {
+        private boolean enabled = true;
+        private int capacity = 16;
+
+        public boolean enabled() { return enabled; }
+        public int capacity() { return clamp(capacity, 1, 64); }
+
+        public void setEnabled(boolean v) { this.enabled = v; }
+        public void setCapacity(int v) { this.capacity = clamp(v, 1, 64); }
+
+        private static int clamp(int value, int min, int max) {
+            return Math.max(min, Math.min(value, max));
+        }
     }
 
     public static final class RemoteTakeConfig {

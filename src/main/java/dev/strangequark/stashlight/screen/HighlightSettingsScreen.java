@@ -181,6 +181,15 @@ public final class HighlightSettingsScreen extends BaseOwoScreen<FlowLayout> {
                     v -> { Config.get().searchInventoryBar().setEnabled(v); Config.save(); }));
         }));
 
+        // 4b. Take Queue
+        var tq = Config.get().takeQueue();
+        content.child(sectionCard("gui.stashlight.label.takeQueue", card -> {
+            card.child(makeCheckbox("gui.stashlight.label.enabled",
+                    tq.enabled(), v -> { tq.setEnabled(v); Config.save(); }));
+            card.child(makeSlider("gui.stashlight.label.queueCapacity",
+                    tq.capacity(), 1, 64, v -> { tq.setCapacity(v); Config.save(); }));
+        }));
+
         // 5. Remote Take
         var rt = Config.get().remoteTake();
         content.child(sectionCard("gui.stashlight.label.remoteTake", card -> {

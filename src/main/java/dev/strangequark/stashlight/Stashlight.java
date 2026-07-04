@@ -11,6 +11,7 @@ import dev.strangequark.stashlight.scan.ProximityScanner;
 import dev.strangequark.stashlight.scan.VanillaScanner;
 import dev.strangequark.stashlight.scan.VanillaTaker;
 import dev.strangequark.stashlight.take.TakeClient;
+import dev.strangequark.stashlight.take.TakeQueue;
 import dev.strangequark.stashlight.screen.SearchScreen;
 import dev.strangequark.stashlight.serializer.Serializer;
 import dev.strangequark.stashlight.util.Util;
@@ -78,6 +79,10 @@ public class Stashlight implements ClientModInitializer {
         return takeClient;
     }
 
+    public TakeQueue getTakeQueue() {
+        return takeQueue;
+    }
+
     private Serializer serializer;
     private Serializer serverSerializer;
     private ContainerRepository repository;
@@ -86,6 +91,7 @@ public class Stashlight implements ClientModInitializer {
     private VanillaScanner vanillaScanner;
     private VanillaTaker vanillaTaker;
     private TakeClient takeClient;
+    private TakeQueue takeQueue;
     private static KeyMapping searchKey;
     public static final KeyMapping.Category STASHLIGHT = KeyMapping.Category.register(ResourceLocation.fromNamespaceAndPath(MOD_ID, "stashlight"));
 
@@ -209,17 +215,28 @@ public class Stashlight implements ClientModInitializer {
             vanillaTaker = new VanillaTaker();
             vanillaTaker.setRepository(repository);
             takeClient = new TakeClient();
+            takeQueue = new TakeQueue();
         });
 
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             if (repository != null) {
                 repository.shutdown();
             }
+            if (takeClient != null) {
+                takeClient.reset();
+            }
+            if (takeQueue != null) {
+                takeQueue.clear();
+            }
             resetServerState();
             serializer = null;
             serverSerializer = null;
             repository = null;
             autoIndexer = null;
+            vanillaScanner = null;
+            vanillaTaker = null;
+            takeClient = null;
+            takeQueue = null;
         });
     }
 
