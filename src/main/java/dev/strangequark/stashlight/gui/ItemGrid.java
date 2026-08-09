@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -51,6 +52,11 @@ public class ItemGrid extends BaseComponent {
         this.slotsPerRow = Math.max(1, newSlotsPerRow);
         this.hoveredIndex = -1;
         this.notifyParentIfMounted();
+    }
+
+    public ItemStack getHoveredStack() {
+        if (hoveredIndex < 0 || hoveredIndex >= items.size()) return ItemStack.EMPTY;
+        return items.get(hoveredIndex).stack();
     }
 
     @Override
@@ -187,9 +193,14 @@ public class ItemGrid extends BaseComponent {
             lines.add(Component.translatable("gui.stashlight.tooltip.highlightHints").withStyle(ChatFormatting.DARK_GRAY));
         }
 
+        if (NestedContainerPreview.hasPreview(item.stack())) {
+            lines.add(Component.empty());
+            lines.add(Component.translatable("gui.stashlight.tooltip.shiftPreview").withStyle(ChatFormatting.DARK_GRAY));
+        }
+
         graphics.setTooltipForNextFrame(
                 mc.font, lines,
-                item.stack().getTooltipImage(),
+                Optional.empty(),
                 mouseX, mouseY,
                 item.stack().get(DataComponents.TOOLTIP_STYLE)
         );

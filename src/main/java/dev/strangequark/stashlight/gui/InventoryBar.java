@@ -4,7 +4,16 @@ import io.wispforest.owo.ui.base.BaseComponent;
 import io.wispforest.owo.ui.core.OwoUIDrawContext;
 import io.wispforest.owo.ui.core.Sizing;
 import net.minecraft.client.Minecraft;
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 import static dev.strangequark.stashlight.gui.UIStyle.*;
 
@@ -19,9 +28,15 @@ public class InventoryBar extends BaseComponent {
     private static final int ROWS = 4;
     private static final int COLS = 9;
 
+    private ItemStack hoveredStack = ItemStack.EMPTY;
+
     public InventoryBar() {
         this.horizontalSizing(Sizing.content());
         this.verticalSizing(Sizing.content());
+    }
+
+    public ItemStack getHoveredStack() {
+        return hoveredStack;
     }
 
     @Override
@@ -40,6 +55,7 @@ public class InventoryBar extends BaseComponent {
         if (mc.player == null) return;
 
         var inventory = mc.player.getInventory();
+        hoveredStack = ItemStack.EMPTY;
 
         for (int i = 0; i < 36; i++) {
             int row = i / COLS;
@@ -67,13 +83,43 @@ public class InventoryBar extends BaseComponent {
                     float labelX = slotX + SLOT_SIZE - font.width(countStr) * scale - 1;
                     float labelY = slotY + SLOT_SIZE - font.lineHeight * scale - 1;
                     graphics.drawText(
-                            net.minecraft.network.chat.Component.literal(countStr),
+                            Component.literal(countStr),
                             labelX, labelY, scale,
                             0xFFFFFFFF,
                             OwoUIDrawContext.TextAnchor.TOP_LEFT
                     );
                 }
             }
+
+            if (mouseX >= slotX && mouseX < slotX + SLOT_SIZE
+                    && mouseY >= slotY && mouseY < slotY + SLOT_SIZE) {
+                hoveredStack = inventory.getItem(i);
+            }
         }
+
+        if (!hoveredStack.isEmpty() && mc.level != null) {
+            renderTooltip(graphics, hoveredStack, mouseX, mouseY, mc);
+        }
+    }
+
+    private void renderTooltip(OwoUIDrawContext graphics, ItemStack stack, int mouseX, int mouseY, Minecraft mc) {
+        assert mc.player != null;
+        List<Component> lines = new ArrayList<>(stack.getTooltipLines(
+                Item.TooltipContext.of(mc.level),
+                mc.player,
+                mc.options.advancedItemTooltips ? TooltipFlag.ADVANCED : TooltipFlag.NORMAL
+        ));
+
+        if (NestedContainerPreview.hasPreview(stack)) {
+            lines.add(Component.empty());
+            lines.add(Component.translatable("gui.stashlight.tooltip.shiftPreview").withStyle(ChatFormatting.DARK_GRAY));
+        }
+
+        graphics.setTooltipForNextFrame(
+                mc.font, lines,
+                Optional.empty(),
+                mouseX, mouseY,
+                stack.get(DataComponents.TOOLTIP_STYLE)
+        );
     }
 }

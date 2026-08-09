@@ -31,10 +31,24 @@ public final class TakeQueue {
     }
 
     public boolean add(DisplayItem item, int quantity) {
+        StackKey key = new StackKey(item.stack());
+        int qty = Math.max(1, quantity);
+
+        for (int i = 0; i < entries.size(); i++) {
+            TakeQueueEntry existing = entries.get(i);
+            if (existing.key().equals(key)) {
+                int mergedQty = existing.quantity() + qty;
+                ItemStack mergedStack = existing.displayStack().copy();
+                mergedStack.setCount(mergedQty);
+                entries.set(i, new TakeQueueEntry(key, mergedStack, mergedQty));
+                return true;
+            }
+        }
+
         if (isFull()) return false;
         ItemStack stack = item.stack().copy();
-        stack.setCount(Math.max(1, quantity));
-        entries.add(new TakeQueueEntry(new StackKey(item.stack()), stack, Math.max(1, quantity)));
+        stack.setCount(qty);
+        entries.add(new TakeQueueEntry(key, stack, qty));
         return true;
     }
 

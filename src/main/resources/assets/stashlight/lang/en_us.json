@@ -107,6 +107,7 @@
 
   "gui.stashlight.tooltip.takeHints": "LMB: Take | RMB: Highlight | Shift+LMB: Take all",
   "gui.stashlight.tooltip.highlightHints": "LMB: Highlight | RMB: Highlight",
+  "gui.stashlight.tooltip.shiftPreview": "Hold Shift to preview contents",
 
   "gui.stashlight.label.quantity": "Qty:",
 

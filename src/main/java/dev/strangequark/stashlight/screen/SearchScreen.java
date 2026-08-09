@@ -5,6 +5,7 @@ import dev.strangequark.stashlight.config.Config;
 import dev.strangequark.stashlight.gui.EnchantFilterPanel;
 import dev.strangequark.stashlight.gui.InventoryBar;
 import dev.strangequark.stashlight.gui.ItemGrid;
+import dev.strangequark.stashlight.gui.NestedContainerPreview;
 import dev.strangequark.stashlight.gui.TakeQueuePanel;
 import dev.strangequark.stashlight.logic.filter.*;
 import dev.strangequark.stashlight.logic.sort.SortManager;
@@ -44,6 +45,7 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
     private FlowLayout mainWindow;
     private TextBoxComponent searchField;
     private ItemGrid itemGrid;
+    private InventoryBar inventoryBar;
     private TakeQueuePanel queuePanel;
 
     private final FilterManager filterManager = new FilterManager();
@@ -345,7 +347,8 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
                     .horizontalAlignment(HorizontalAlignment.LEFT)
                     .surface(Surface.outline(GRID_BORDER))
                     .padding(Insets.of(BORDER));
-            invBarWrapper.child(new InventoryBar());
+            this.inventoryBar = new InventoryBar();
+            invBarWrapper.child(this.inventoryBar);
             bottomRow.child(invBarWrapper);
         }
 
@@ -374,7 +377,8 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
         var stashlight = Stashlight.getInstance();
         var takeQueue = stashlight != null ? stashlight.getTakeQueue() : null;
         this.queuePanel = new TakeQueuePanel(takeQueue);
-        this.queuePanel.setColumns(inventoryBarVisible ? 4 : 1);
+        int capacity = Config.get().takeQueue().capacity();
+        this.queuePanel.setColumns(inventoryBarVisible ? Math.min(4, capacity) : capacity);
 
         FlowLayout buttons = (FlowLayout) Containers.horizontalFlow(Sizing.content(), Sizing.fixed(COMPONENT_HEIGHT))
                 .gap(GAP)
@@ -687,6 +691,19 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
 
         updateSyncTimeLabel();
         super.render(context, mouseX, mouseY, delta);
+
+        // v1.3: Shift-hover nested container preview (chest-like grid)
+        if (hasShiftDown()) {
+            ItemStack hovered = ItemStack.EMPTY;
+            if (inventoryBar != null && !inventoryBar.getHoveredStack().isEmpty()) {
+                hovered = inventoryBar.getHoveredStack();
+            } else if (itemGrid != null && !itemGrid.getHoveredStack().isEmpty()) {
+                hovered = itemGrid.getHoveredStack();
+            }
+            if (!hovered.isEmpty() && NestedContainerPreview.hasPreview(hovered)) {
+                NestedContainerPreview.render(context, hovered, mouseX, mouseY);
+            }
+        }
     }
 
     @Override
@@ -704,5 +721,9 @@ public class SearchScreen extends BaseOwoScreen<FlowLayout> {
     @Override
     public boolean isPauseScreen() {
         return false;
+    }
+
+    private static boolean hasShiftDown() {
+        return Minecraft.getInstance().options.keyShift.isDown();
     }
 }

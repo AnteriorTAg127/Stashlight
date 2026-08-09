@@ -107,6 +107,7 @@
 
   "gui.stashlight.tooltip.takeHints": "左键：拿取 | 右键：高亮 | Shift+左键：全拿",
   "gui.stashlight.tooltip.highlightHints": "左键：高亮 | 右键：高亮",
+  "gui.stashlight.tooltip.shiftPreview": "按住 Shift 预览内容物",
 
   "gui.stashlight.label.quantity": "数量：",
 
