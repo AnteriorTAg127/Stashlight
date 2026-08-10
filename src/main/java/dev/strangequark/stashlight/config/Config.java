@@ -37,6 +37,7 @@ public final class Config {
     private SearchInventoryBarConfig searchInventoryBar = new SearchInventoryBarConfig();
     private TakeQueueConfig takeQueue = new TakeQueueConfig();
     private RemoteTakeConfig remoteTake = new RemoteTakeConfig();
+    private CraftingConfig crafting = new CraftingConfig();
 
     /* ---------------- runtime-only state ---------------- */
 
@@ -121,6 +122,11 @@ public final class Config {
         return remoteTake;
     }
 
+    public CraftingConfig crafting() {
+        if (crafting == null) crafting = new CraftingConfig();
+        return crafting;
+    }
+
     public void setLookAtTarget(boolean value) {
         if (this.lookAtTarget == value) return;
         this.lookAtTarget = value;
@@ -170,6 +176,7 @@ public final class Config {
         if (this.searchInventoryBar == null) this.searchInventoryBar = new SearchInventoryBarConfig();
         if (this.takeQueue == null) this.takeQueue = new TakeQueueConfig();
         if (this.remoteTake == null) this.remoteTake = new RemoteTakeConfig();
+        if (this.crafting == null) this.crafting = new CraftingConfig();
         this.dataSource.validate();
     }
 
@@ -428,6 +435,49 @@ public final class Config {
         public void setDropOnFullEnabled(boolean v) { this.dropOnFullEnabled = v; }
         public void setKeepScreenOnTake(boolean v) { this.keepScreenOnTake = v; }
         public void setTakeContainingBoxEnabled(boolean v) { this.takeContainingBoxEnabled = v; }
+
+        private static int clamp(int value, int min, int max) {
+            return Math.max(min, Math.min(value, max));
+        }
+    }
+
+    public static final class CraftingConfig {
+        private boolean enabled = true;
+        private boolean showAllRecipes = true;
+        private int maxCraftQuantity = 64;
+        private boolean takeBeforeCraft = true;
+        private boolean keepScreenOnCraft = true;
+        private int craftIntervalTicks = 4;
+        /**
+         * Advanced: allow craft-triggered takes to drop overflow materials on the
+         * ground and wait for them to be picked back up before crafting. Off by
+         * default: overflow stays in the chest and crafting uses what fits.
+         */
+        private boolean recoverDroppedMaterials = false;
+        /**
+         * When a dropped material cannot be auto-picked (too far / inventory
+         * full): true = keep waiting until the player walks over and picks it up;
+         * false = craft with what was recovered (partial craft).
+         */
+        private boolean waitManualPickup = false;
+
+        public boolean enabled() { return enabled; }
+        public boolean showAllRecipes() { return showAllRecipes; }
+        public int maxCraftQuantity() { return clamp(maxCraftQuantity, 1, 9999); }
+        public boolean takeBeforeCraft() { return takeBeforeCraft; }
+        public boolean keepScreenOnCraft() { return keepScreenOnCraft; }
+        public int craftIntervalTicks() { return clamp(craftIntervalTicks, 1, 20); }
+        public boolean recoverDroppedMaterials() { return recoverDroppedMaterials; }
+        public boolean waitManualPickup() { return waitManualPickup; }
+
+        public void setEnabled(boolean v) { this.enabled = v; }
+        public void setShowAllRecipes(boolean v) { this.showAllRecipes = v; }
+        public void setMaxCraftQuantity(int v) { this.maxCraftQuantity = clamp(v, 1, 9999); }
+        public void setTakeBeforeCraft(boolean v) { this.takeBeforeCraft = v; }
+        public void setKeepScreenOnCraft(boolean v) { this.keepScreenOnCraft = v; }
+        public void setCraftIntervalTicks(int v) { this.craftIntervalTicks = clamp(v, 1, 20); }
+        public void setRecoverDroppedMaterials(boolean v) { this.recoverDroppedMaterials = v; }
+        public void setWaitManualPickup(boolean v) { this.waitManualPickup = v; }
 
         private static int clamp(int value, int min, int max) {
             return Math.max(min, Math.min(value, max));

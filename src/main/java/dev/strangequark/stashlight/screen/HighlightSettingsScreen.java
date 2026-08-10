@@ -201,6 +201,26 @@ public final class HighlightSettingsScreen extends BaseOwoScreen<FlowLayout> {
                     rt.takeContainingBoxEnabled(), v -> { rt.setTakeContainingBoxEnabled(v); Config.save(); }));
         }));
 
+        // 6. Crafting
+        var cr = Config.get().crafting();
+        content.child(sectionCard("gui.stashlight.label.crafting", card -> {
+            card.child(makeCheckbox("gui.stashlight.label.enabled",
+                    cr.enabled(), v -> { cr.setEnabled(v); Config.save(); }));
+            card.child(makeCheckbox("gui.stashlight.label.showAllRecipes",
+                    cr.showAllRecipes(), v -> { cr.setShowAllRecipes(v); Config.save(); }));
+            card.child(makeSlider("gui.stashlight.label.maxCraftQuantity",
+                    cr.maxCraftQuantity(), 1, 9999,
+                    v -> { cr.setMaxCraftQuantity(v); Config.save(); }));
+            card.child(makeCheckbox("gui.stashlight.label.takeBeforeCraft",
+                    cr.takeBeforeCraft(), v -> { cr.setTakeBeforeCraft(v); Config.save(); }));
+            card.child(makeCheckbox("gui.stashlight.label.keepScreenOnCraft",
+                    cr.keepScreenOnCraft(), v -> { cr.setKeepScreenOnCraft(v); Config.save(); }));
+            card.child(makeCheckbox("gui.stashlight.label.recoverDroppedMaterials",
+                    cr.recoverDroppedMaterials(), v -> { cr.setRecoverDroppedMaterials(v); Config.save(); }));
+            card.child(makeCheckbox("gui.stashlight.label.waitManualPickup",
+                    cr.waitManualPickup(), v -> { cr.setWaitManualPickup(v); Config.save(); }));
+        }));
+
         ScrollContainer<FlowLayout> scroll = Containers
                 .verticalScroll(Sizing.fill(100), Sizing.expand(100), content)
                 .scrollbarThiccness(SCROLL_WIDTH)

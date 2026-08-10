@@ -66,6 +66,25 @@ public final class VanillaTaker {
     private final List<TakeQueueEntry> queuedEntries = new ArrayList<>();
     private int queueEntryIndex = -1;
     private boolean queueMode = false;
+    private Runnable queueDoneCallback;
+
+    /** When true, drop-on-full is disabled (craft-triggered takes must never lose materials). */
+    private boolean suppressDropOnFull = false;
+
+    /** Total items dropped on the ground during the last queue take (for craft recovery). */
+    private int droppedLastQueue = 0;
+
+    /** Whether the last queue visit opened containers but never found the target item. */
+    private boolean notFoundThisQueue = false;
+
+    public void setSuppressDropOnFull(boolean value) {
+        this.suppressDropOnFull = value;
+    }
+
+    /** Whether the last queue take dropped overflow items onto the ground. */
+    public boolean droppedDuringLastQueue() {
+        return droppedLastQueue > 0;
+    }
 
     public VanillaTaker() {
         INSTANCE = this;
@@ -122,19 +141,29 @@ public final class VanillaTaker {
 
         mc.setScreen(null);
 
+        droppedLastQueue = 0;
+        notFoundThisQueue = false;
         queuedEntries.clear();
         for (TakeQueueEntry entry : entries) {
             if (resolveEntry(entry).isPresent()) {
                 queuedEntries.add(entry);
             }
         }
+        LOGGER.info("VanillaTaker beginQueue: {} entries requested, {} resolved to reachable sources",
+                entries.size(), queuedEntries.size());
 
         if (queuedEntries.isEmpty()) {
             if (mc.player != null) {
                 mc.player.displayClientMessage(
                         Component.translatable("gui.stashlight.message.queueNothingReachable"), true);
             }
-            restorePendingTicks = 5;
+            Runnable cb = queueDoneCallback;
+            queueDoneCallback = null;
+            if (cb != null) {
+                cb.run();
+            } else {
+                restorePendingTicks = 5;
+            }
             return;
         }
 
@@ -160,9 +189,14 @@ public final class VanillaTaker {
 
         var resolved = resolveEntry(queuedEntries.get(index));
         if (resolved.isEmpty()) {
+            LOGGER.info("VanillaTaker queue entry {} ('{}' x{}) could not be resolved to a reachable source, skipping",
+                    index, queuedEntries.get(index).displayStack().getHoverName().getString(),
+                    queuedEntries.get(index).quantity());
             startQueueEntry(index + 1);
             return;
         }
+        LOGGER.info("VanillaTaker queue entry {} resolved: '{}' ({} in reach)",
+                index, resolved.get().stack().getHoverName().getString(), resolved.get().totalCount());
 
         targetStack = resolved.get().stack();
         totalWanted = queuedEntries.get(index).quantity();
@@ -178,12 +212,30 @@ public final class VanillaTaker {
         queueEntryIndex = -1;
         queueMode = false;
         state = State.IDLE;
-        restorePendingTicks = 5;
+        suppressDropOnFull = false;
+        Runnable cb = queueDoneCallback;
+        queueDoneCallback = null;
+        if (cb != null) {
+            // A craft follows: don't restore the search screen here; CraftExecutor
+            // restores it after crafting finishes.
+            restorePendingTicks = 0;
+            cb.run();
+        } else {
+            restorePendingTicks = 5;
+        }
         var mc = Minecraft.getInstance();
         if (mc.player != null) {
             mc.player.displayClientMessage(
                     Component.translatable("gui.stashlight.message.queueDone"), true);
         }
+    }
+
+    /**
+     * Set a one-shot callback invoked once the current queue take finishes.
+     * Used to chain "take then craft".
+     */
+    public void setQueueDoneCallback(Runnable callback) {
+        this.queueDoneCallback = callback;
     }
 
     /**
@@ -263,10 +315,13 @@ public final class VanillaTaker {
                 if (hadItem) {
                     remaining -= taken;
                     takenSoFar += taken;
+                    LOGGER.info("VanillaTaker took {} of '{}' from container {}, {} still wanted",
+                            taken, targetStack.getHoverName().getString(), candidateIndex, remaining);
                     showProgress();
                 } else {
                     // Item not found in this container — skip
                     LOGGER.debug("Item not found in container {}, skipping", candidateIndex);
+                    notFoundThisQueue = true;
                 }
                 // Refresh this container's cached inventory before closing — the
                 // container is already open, so reading slots is free and keeps
@@ -293,6 +348,11 @@ public final class VanillaTaker {
                     Component msg;
                     if (remaining <= 0) {
                         msg = Component.translatable("gui.stashlight.message.takeDone", takenSoFar);
+                    } else if (takenSoFar == 0 && notFoundThisQueue) {
+                        // The index said the item was reachable but no open
+                        // container actually held it — stale index or moved items.
+                        msg = Component.translatable("gui.stashlight.message.takeNotFound",
+                                targetStack.getHoverName().getString());
                     } else {
                         msg = Component.translatable("gui.stashlight.message.takePartial", takenSoFar, totalWanted);
                     }
@@ -403,7 +463,7 @@ public final class VanillaTaker {
         boolean moved = after.isEmpty() || after.getCount() < before.getCount();
         if (moved) return true;
 
-        if (Config.get().remoteTake().dropOnFullEnabled()) {
+        if (Config.get().remoteTake().dropOnFullEnabled() && !INSTANCE.suppressDropOnFull) {
             dropFromSlot(client, menu.containerId, slotId, 1, before.getCount());
             return true;
         }
@@ -425,6 +485,24 @@ public final class VanillaTaker {
         int before = countInInventory(player, target);
         int dropped = 0;
 
+        // Diagnostic: if the backpack can't hold the requested amount, say why
+        // instead of silently taking less (free slots + merge room into stacks).
+        int freeSlots = 0;
+        int mergeRoom = 0;
+        var inv = player.getInventory();
+        for (int i = 0; i < 36; i++) {
+            var s = inv.getItem(i);
+            if (s.isEmpty()) {
+                freeSlots++;
+            } else if (ItemStack.isSameItemSameComponents(s, target)) {
+                mergeRoom += Math.max(0, s.getMaxStackSize() - s.getCount());
+            }
+        }
+        if (freeSlots + mergeRoom < maxCount) {
+            LOGGER.info("VanillaTaker: limited backpack space for {} of '{}' ({} free slots + {} merge room)",
+                    maxCount, target.getHoverName().getString(), freeSlots, mergeRoom);
+        }
+
         for (int i = 0; i < slots.size(); i++) {
             var slot = slots.get(i);
             if (slot.container == player.getInventory()) continue;
@@ -444,19 +522,44 @@ public final class VanillaTaker {
                         menu.containerId, i, 0, ClickType.QUICK_MOVE, player);
                 int transferred = countInInventory(player, target) - invBefore;
                 int remain = have - transferred;
-                if (remain > 0 && dropOnFull) {
+                if (remain > 0 && dropOnFull && !suppressDropOnFull) {
                     int needDrop = stillNeed - transferred;
                     int toDrop = Math.min(remain, needDrop);
                     if (toDrop > 0) {
                         dropFromSlot(client, menu.containerId, i, toDrop, remain);
                         dropped += toDrop;
+                        droppedLastQueue += toDrop;
                     }
                 }
             } else {
+                // Pick up the whole stack onto the cursor, then place items:
+                // first merge into existing non-full stacks of the same item,
+                // then fill empty inventory slots one item each. Previously the
+                // merge step was missing, so e.g. 45 diamonds needed 45 empty
+                // slots — with a partially used inventory the "full" fallback
+                // dropped the leftover materials onto the ground.
                 client.gameMode.handleInventoryMouseClick(
                         menu.containerId, i, 0, ClickType.PICKUP, player);
+                int carried = menu.getCarried().getCount();
                 int placed = 0;
-                for (int j = 0; j < slots.size() && placed < stillNeed; j++) {
+
+                // 1) merge into existing non-full stacks of the same item
+                for (int j = 0; j < slots.size() && placed < stillNeed && carried > 0; j++) {
+                    var invSlot = slots.get(j);
+                    if (invSlot.container != player.getInventory()) continue;
+                    if (invSlot.index >= 36) continue;
+                    ItemStack s = invSlot.getItem();
+                    if (s.isEmpty() || !ItemStack.isSameItemSameComponents(s, target)) continue;
+                    if (s.getCount() >= s.getMaxStackSize()) continue;
+                    client.gameMode.handleInventoryMouseClick(
+                            menu.containerId, j, 0, ClickType.PICKUP, player);
+                    int newCarried = menu.getCarried().getCount();
+                    placed += carried - newCarried;
+                    carried = newCarried;
+                }
+
+                // 2) fill empty slots, one item per slot
+                for (int j = 0; j < slots.size() && placed < stillNeed && carried > 0; j++) {
                     var invSlot = slots.get(j);
                     if (invSlot.container != player.getInventory()) continue;
                     if (invSlot.index >= 36) continue;
@@ -464,13 +567,17 @@ public final class VanillaTaker {
                     client.gameMode.handleInventoryMouseClick(
                             menu.containerId, j, 1, ClickType.PICKUP, player);
                     placed++;
+                    carried--;
                 }
+
+                // Return the rest to the container slot.
                 client.gameMode.handleInventoryMouseClick(
                         menu.containerId, i, 0, ClickType.PICKUP, player);
-                if (placed < stillNeed && dropOnFull) {
+                if (placed < stillNeed && dropOnFull && !suppressDropOnFull) {
                     int toDrop = stillNeed - placed;
                     dropFromSlot(client, menu.containerId, i, toDrop, have - placed);
                     dropped += toDrop;
+                    droppedLastQueue += toDrop;
                 }
             }
         }
@@ -614,7 +721,17 @@ public final class VanillaTaker {
         queueEntryIndex = -1;
         queueMode = false;
         state = State.IDLE;
-        restorePendingTicks = 5;
+        suppressDropOnFull = false;
+        Runnable cb = queueDoneCallback;
+        queueDoneCallback = null;
+        if (cb != null) {
+            // A craft follows: don't restore the search screen here; the craft
+            // flow restores it after crafting finishes (or interrupts).
+            restorePendingTicks = 0;
+            cb.run();
+        } else {
+            restorePendingTicks = 5;
+        }
         if (Minecraft.getInstance().player != null) {
             Minecraft.getInstance().player.displayClientMessage(
                     Component.translatable("gui.stashlight.message.takeStop", reason), true);
@@ -661,6 +778,9 @@ public final class VanillaTaker {
         if (repository == null) return;
         var mc = Minecraft.getInstance();
         if (mc.player == null) return;
+        // Never clobber a screen the player opened meanwhile (e.g. the settings
+        // screen) — only restore the search screen when nothing else is open.
+        if (mc.screen != null) return;
         mc.setScreen(new SearchScreen(repository));
     }
 

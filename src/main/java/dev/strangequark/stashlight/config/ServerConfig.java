@@ -29,6 +29,7 @@ public final class ServerConfig {
     private PermissionConfig permission = new PermissionConfig();
     private LimitConfig limits = new LimitConfig();
     private TakeConfig take = new TakeConfig();
+    private CraftConfig craft = new CraftConfig();
 
     public static ServerConfig get() {
         if (INSTANCE == null) load();
@@ -60,6 +61,7 @@ public final class ServerConfig {
         if (permission == null) permission = new PermissionConfig();
         if (limits == null) limits = new LimitConfig();
         if (take == null) take = new TakeConfig();
+        if (craft == null) craft = new CraftConfig();
     }
 
     public static void save() {
@@ -77,6 +79,7 @@ public final class ServerConfig {
     public PermissionConfig permission() { return permission; }
     public LimitConfig limits() { return limits; }
     public TakeConfig take() { return take; }
+    public CraftConfig craft() { return craft; }
 
     public static final class ScanConfig {
         private int maxRadius = 48;
@@ -150,6 +153,22 @@ public final class ServerConfig {
         public int bucketCapacity() { return clamp(bucketCapacity, 1, 64); }
         public int refillTicks() { return clamp(refillTicks, 1, 1200); }
         public boolean dropOnFullEnabled() { return dropOnFullEnabled; }
+    }
+
+    /**
+     * Craft-tab integration (F7-B, optional server enhancement). Default off.
+     * When {@code autoUnlockAllRecipes} is enabled, the server grants every
+     * crafting recipe to each player's recipe book on join, so the client
+     * recipe book and the craft tab list all recipes.
+     */
+    public static final class CraftConfig {
+        private boolean autoUnlockAllRecipes = false;
+
+        public boolean autoUnlockAllRecipes() { return autoUnlockAllRecipes; }
+
+        public void setAutoUnlockAllRecipes(boolean autoUnlockAllRecipes) {
+            this.autoUnlockAllRecipes = autoUnlockAllRecipes;
+        }
     }
 
     private static int clamp(int value, int min, int max) {

@@ -24,6 +24,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.CraftingRecipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -125,6 +127,13 @@ public class StashlightServer implements ModInitializer {
                 StashlightPayloads.PROTOCOL_VERSION,
                 cfg.take().enabled()
         ));
+
+        // F7-B (optional, server-side): unlock the full crafting recipe book when
+        // configured. Runs once per join, right after the handshake; addRecipes is
+        // idempotent (skips already-known recipes), so re-joins are safe no-ops.
+        if (cfg.craft().autoUnlockAllRecipes()) {
+            unlockAllCraftingRecipes(handler.getPlayer(), server);
+        }
     }
 
     private void onPlayerDisconnect(ServerGamePacketListenerImpl handler, MinecraftServer server) {
@@ -132,6 +141,23 @@ public class StashlightServer implements ModInitializer {
         v2Players.remove(uuid);
         lastPlayerDimension.remove(uuid);
         signatureStore.clear(uuid);
+    }
+
+    /**
+     * F7-B: grant every crafting recipe to the player's recipe book so the client
+     * recipe book and the craft tab list all recipes. The server syncs the granted
+     * entries to the client via ClientboundRecipeBookAddPacket inside
+     * {@code ServerRecipeBook.addRecipes}; special recipes and already-known
+     * recipes are skipped there, so calling this on every join is safe.
+     */
+    private void unlockAllCraftingRecipes(ServerPlayer player, MinecraftServer server) {
+        List<RecipeHolder<?>> allCrafting = server.getRecipeManager().getRecipes().stream()
+                .filter(holder -> holder.value() instanceof CraftingRecipe)
+                .toList();
+        if (allCrafting.isEmpty()) return;
+        int added = player.getRecipeBook().addRecipes(allCrafting, player);
+        LOGGER.info("Stashlight unlocked {} crafting recipes for {}",
+                added, player.getName().getString());
     }
 
     private void handleClientReady(ClientReadyPayload payload, ServerPlayer player) {

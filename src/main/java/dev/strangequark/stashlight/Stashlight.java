@@ -200,6 +200,9 @@ public class Stashlight implements ClientModInitializer {
             if (vanillaTaker != null) {
                 vanillaTaker.tick(client);
             }
+
+            // v1.5: crafting executor (take-then-craft state machine)
+            dev.strangequark.stashlight.crafting.CraftExecutor.get().tick(client);
         });
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {

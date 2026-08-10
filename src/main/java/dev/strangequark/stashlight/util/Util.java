@@ -1,14 +1,27 @@
 package dev.strangequark.stashlight.util;
 
+import dev.strangequark.stashlight.Stashlight;
+import dev.strangequark.stashlight.model.DataSourceMode;
+import dev.strangequark.stashlight.model.IndexedItem;
+import dev.strangequark.stashlight.model.LocatePath;
+import dev.strangequark.stashlight.repository.ContainerRepository;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.CompoundContainer;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.ChestType;
+import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class Util {
@@ -75,5 +88,75 @@ public class Util {
             return ROMAN[level - 1];
         }
         return String.valueOf(level);
+    }
+
+    // ── reach & item counting (shared by take / craft flows) ─────────────
+
+    private static final double VANILLA_REACH = 4.5;
+
+    /** Modded take radius when available, else the vanilla 4.5-block reach. */
+    public static double reachRadius() {
+        var stashlight = Stashlight.getInstance();
+        if (stashlight != null && stashlight.isModdedTakeAvailable()) {
+            return stashlight.getServerMaxRadius();
+        }
+        return VANILLA_REACH;
+    }
+
+    public static boolean isWithinReach(BlockPos pos) {
+        LocalPlayer player = Minecraft.getInstance().player;
+        if (player == null) return true;
+        double reach = reachRadius();
+        if (reach <= 0) return true;
+        return player.position().distanceToSqr(Vec3.atCenterOf(pos)) <= reach * reach;
+    }
+
+    /**
+     * Reachable repository items, deduplicated by (position, locate path). A
+     * container indexed both locally (opened) and by a server scan appears twice
+     * in the MERGED index; without dedup every count (consumption, maxCraftable,
+     * search totals) would double.
+     */
+    public static List<IndexedItem> reachableItems(ContainerRepository repository) {
+        if (repository == null) return List.of();
+        Map<ReachKey, IndexedItem> bySlot = new LinkedHashMap<>();
+        for (IndexedItem item : repository.getSearchIndex(DataSourceMode.MERGED)) {
+            if (item.pos() == null || !isWithinReach(item.pos())) continue;
+            ReachKey key = new ReachKey(item.pos(), item.path());
+            IndexedItem existing = bySlot.get(key);
+            if (existing == null || item.timestamp() > existing.timestamp()) {
+                bySlot.put(key, item);
+            }
+        }
+        return new ArrayList<>(bySlot.values());
+    }
+
+    private record ReachKey(BlockPos pos, LocatePath path) {
+    }
+
+    /** Count of {@code stack} (item + components) in the player inventory. */
+    public static int countInInventory(ItemStack stack) {
+        var player = Minecraft.getInstance().player;
+        if (player == null) return 0;
+        int count = 0;
+        var inv = player.getInventory();
+        for (int i = 0; i < 36; i++) {
+            var s = inv.getItem(i);
+            if (ItemStack.isSameItemSameComponents(s, stack)) count += s.getCount();
+        }
+        return count;
+    }
+
+    /** Count of {@code stack} (item + components) in reachable chests. */
+    public static int countInReach(ItemStack stack) {
+        var stashlight = Stashlight.getInstance();
+        ContainerRepository repository = stashlight != null ? stashlight.getRepository() : null;
+        int count = 0;
+        for (IndexedItem item : reachableItems(repository)) {
+            if (ItemStack.isSameItemSameComponents(item.stack(), stack)) {
+                count += item.stack().getCount();
+            }
+        }
+        return count;
     }
 }

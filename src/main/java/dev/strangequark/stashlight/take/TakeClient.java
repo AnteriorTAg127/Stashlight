@@ -45,6 +45,7 @@ public final class TakeClient {
     private final List<TakeQueueEntry> queuedEntries = new ArrayList<>();
     private int queueIndex = -1;
     private Runnable onAllDone;
+    private Runnable queueDoneCallback;
 
     private record PlannedTake(BlockPos pos, int slot, ItemStack target, int requestCount,
                                boolean box, int contentCount) {
@@ -304,6 +305,11 @@ public final class TakeClient {
                 mc.player.displayClientMessage(
                         Component.translatable("gui.stashlight.message.queueNothingReachable"), true);
             }
+            // One-shot consume, same as onQueueFinished: let the chained callback
+            // (e.g. take-then-craft) proceed and report missing materials.
+            Runnable cb = queueDoneCallback;
+            queueDoneCallback = null;
+            if (cb != null) cb.run();
             return;
         }
 
@@ -345,6 +351,17 @@ public final class TakeClient {
             mc.player.displayClientMessage(
                     Component.translatable("gui.stashlight.message.queueDone"), true);
         }
+        Runnable cb = queueDoneCallback;
+        queueDoneCallback = null;
+        if (cb != null) cb.run();
+    }
+
+    /**
+     * Set a one-shot callback invoked once the current queue take finishes.
+     * Used to chain "take then craft".
+     */
+    public void setQueueDoneCallback(Runnable callback) {
+        this.queueDoneCallback = callback;
     }
 
     /**
@@ -359,5 +376,6 @@ public final class TakeClient {
         queuedEntries.clear();
         queueIndex = -1;
         onAllDone = null;
+        queueDoneCallback = null;
     }
 }
