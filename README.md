@@ -44,6 +44,9 @@ Works as a **client-side only** mod for single-player and client-mode use, and o
 - **Configurable highlight settings**
   Toggle each highlight layer independently, customize colors, adjust highlight duration (1–60s), and enable/disable the pulsing effect.
 
+- **Crafting (v1.5)**
+  The search screen gains a "Craft" page listing unlocked recipes from the vanilla recipe book (craftable highlighted, missing materials grayed), with recipe search and a "craftable only" filter. Click a recipe to see the 3x3/2x2 preview and a live consumption table (need / in backpack / in reach / to take); enter a quantity and hit **Take & Craft** — missing materials are auto-taken from reachable chests (modded and vanilla servers alike), then placed and batch-crafted through the vanilla recipe-book mechanism, stopping exactly at the target. A reachable crafting table enables all 3x3 recipes; without one, the 2x2 inventory grid is used. The top-left "Nearby Stock" panel shows reachable chest items; clicking one selects the recipe that uses it as an ingredient.
+
 - **Bilingual support (EN / 中文)**
   Full English and Simplified Chinese localization.
 
