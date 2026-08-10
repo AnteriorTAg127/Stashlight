@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Non-blocking crafting state machine driven by the client tick.
@@ -58,7 +59,8 @@ public final class CraftExecutor {
     private int craftTarget;
     private int craftedSoFar;
     private int containerId;
-    private boolean useMaxItems;
+    private int craftBatches;
+    private int gridFullBatches;
     private int tickCounter;
     private int craftIntervalTicks;
     private int restorePendingTicks = 0;
@@ -69,6 +71,9 @@ public final class CraftExecutor {
     private boolean recoveryMode = false;
     private int recoverTicks = 0;
     private List<Ingredient> recoverIngredients = List.of();
+
+    /** True when the requested quantity was capped by backpack capacity. */
+    private boolean backpackLimited = false;
 
     public static CraftExecutor get() {
         if (INSTANCE == null) INSTANCE = new CraftExecutor();
@@ -100,16 +105,60 @@ public final class CraftExecutor {
         resultPerCraft = Math.max(1, resultStack.getCount());
 
         int maxCraft = RecipeCatalog.maxCraftableFromInventory(recipe);
-        int batches = CraftMath.batchesFor(requested, resultPerCraft);
-        batches = Math.min(batches, maxCraft);
+        int requestedBatches = CraftMath.batchesFor(requested, resultPerCraft);
+        int batches = Math.min(requestedBatches, maxCraft);
         if (batches <= 0) {
             message("gui.stashlight.message.craftNoMaterials");
             return;
         }
 
+        // Cap the craft target by the backpack capacity: crafted products must
+        // fit into the inventory (free slots + merge room into existing stacks).
+        // Without this, a big target (e.g. 1728 ingots) fills the backpack mid-
+        // craft, the result slot jams and the loop silently stops part-way.
+        int freeSlots = freeInventorySlots();
+        int mergeRoom = mergeRoomFor(resultStack);
+        int maxProductsByBackpack = freeSlots * Math.max(1, resultStack.getMaxStackSize()) + mergeRoom;
+        int maxBatchesByBackpack = Math.max(0, maxProductsByBackpack / resultPerCraft);
+        if (maxBatchesByBackpack < 1) {
+            message("gui.stashlight.message.craftBackpackFull");
+            return;
+        }
+        // The backpack cannot hold the whole target and it already carries some
+        // of the result item: drop those existing stacks onto the ground to free
+        // capacity. The items have a pickup delay, so they are auto-picked again
+        // once the craft consumes materials and frees slots — nothing is lost.
+        if (batches > maxBatchesByBackpack) {
+            int droppedStacks = dropInventoryStacksOf(resultStack);
+            if (droppedStacks > 0) {
+                freeSlots = freeInventorySlots();
+                mergeRoom = mergeRoomFor(resultStack);
+                maxProductsByBackpack = freeSlots * Math.max(1, resultStack.getMaxStackSize()) + mergeRoom;
+                maxBatchesByBackpack = Math.max(0, maxProductsByBackpack / resultPerCraft);
+                message("gui.stashlight.message.craftBackpackCleared", droppedStacks);
+                LOGGER.info("CraftExecutor: dropped {} stack(s) of previous products to free backpack space (new capacity {} batches)",
+                        droppedStacks, maxBatchesByBackpack);
+            }
+        }
+        batches = Math.min(batches, maxBatchesByBackpack);
+        // Only flag the message when the backpack capacity itself cut the target
+        // (a material shortage cuts it too, and must not say "backpack full").
+        this.backpackLimited = batches < Math.min(requestedBatches, maxCraft);
+
         this.craftTarget = CraftMath.craftTarget(batches, resultPerCraft);
         this.craftedSoFar = 0;
-        this.useMaxItems = batches == maxCraft;
+        // Batch placement strategy: fill the whole grid (useMaxItems) while the
+        // remaining target is at least one full grid, then finish one batch at a
+        // time. This makes large crafts run in a handful of shift-clicks instead
+        // of hundreds of single-batch rounds (e.g. 700 boards in ~3 rounds + tail).
+        int gridFullBatches = Integer.MAX_VALUE;
+        for (RecipeCatalog.IngredientGroup group : RecipeCatalog.ingredientGroups(recipe)) {
+            gridFullBatches = Math.min(gridFullBatches,
+                    Math.max(1, group.stack().getMaxStackSize()) / Math.max(1, group.perCraft()));
+        }
+        if (gridFullBatches == Integer.MAX_VALUE) gridFullBatches = 1;
+        this.gridFullBatches = gridFullBatches;
+        this.craftBatches = batches;
         this.craftIntervalTicks = Config.get().crafting().craftIntervalTicks();
         this.tickCounter = 0;
         this.restorePendingTicks = 0;
@@ -118,18 +167,23 @@ public final class CraftExecutor {
         this.recoveryMode = recovery;
         this.recoverTicks = 0;
         this.recoverIngredients = recipe.craftingRequirements().orElse(List.of());
-        LOGGER.info("Craft begin: station={} maxCraft={} batches={} useMaxItems={} craftTarget={} resultPerCraft={} initialResultCount={} recovery={}",
-                station, maxCraft, batches, useMaxItems, craftTarget, resultPerCraft, initialResultCount, recovery);
+        String invCounts = RecipeCatalog.ingredientGroups(recipe).stream()
+                .map(g -> g.stack().getHoverName().getString() + "=" + Util.countInInventory(g.stack()))
+                .collect(Collectors.joining(", "));
+        LOGGER.info("Craft begin: station={} maxCraft={} batches={} craftTarget={} resultPerCraft={} initialResultCount={} recovery={} backpackLimited={} gridFullBatches={} inv[{}]",
+                station, maxCraft, batches, craftTarget, resultPerCraft, initialResultCount, recovery, backpackLimited, gridFullBatches, invCounts);
 
-        if (recoveryMode) {
-            // Wait for dropped materials to be picked back up before crafting.
-            state = State.RECOVER;
-        } else if (station == Station.CRAFTING_TABLE) {
+        if (station == Station.CRAFTING_TABLE) {
             tablePos = Station.findReachableCraftingTable();
             if (tablePos == null) {
                 message("gui.stashlight.message.craftNoTable");
                 return;
             }
+        }
+        if (recoveryMode) {
+            // Wait for dropped materials to be picked back up before crafting.
+            state = State.RECOVER;
+        } else if (station == Station.CRAFTING_TABLE) {
             state = State.OPEN;
         } else {
             this.containerId = InventoryMenu.CONTAINER_ID;
@@ -224,7 +278,14 @@ public final class CraftExecutor {
                     state = State.DONE;
                     break;
                 }
-                client.gameMode.handlePlaceRecipe(containerId, displayId, useMaxItems);
+                // Fill the grid while the remaining target is >= one full grid;
+                // below that, place a single batch at a time to land exactly on target.
+                int remainingBatches = Math.max(0, craftBatches - craftedSoFar / resultPerCraft);
+                boolean useMax = gridFullBatches > 0 && remainingBatches >= gridFullBatches;
+                client.gameMode.handlePlaceRecipe(containerId, displayId, useMax);
+                LOGGER.info("CraftExecutor PLACE: craftedSoFar={} remainingBatches={} useMax={} gridFullBatches={} menu={} containerId={}",
+                        craftedSoFar, remainingBatches, useMax, gridFullBatches,
+                        client.player.containerMenu.getClass().getSimpleName(), containerId);
                 state = State.WAIT_SYNC;
                 tickCounter = 0;
             }
@@ -235,7 +296,10 @@ public final class CraftExecutor {
                 }
                 if (tickCounter < craftIntervalTicks) break;
                 var menu = client.player.containerMenu;
-                if (menu.slots.get(0).getItem().isEmpty()) {
+                var resultSlot = menu.slots.get(0).getItem();
+                if (resultSlot.isEmpty()) {
+                    LOGGER.warn("CraftExecutor WAIT_SYNC: result slot empty after {} ticks, menu={} craftedSoFar={} target={} ticks={}",
+                            tickCounter, menu.getClass().getSimpleName(), craftedSoFar, craftTarget, tickCounter);
                     state = State.DONE; // materials exhausted (or placement failed)
                     break;
                 }
@@ -260,15 +324,11 @@ public final class CraftExecutor {
                     state = State.DONE;
                     break;
                 }
-                var menu = client.player.containerMenu;
-                if (menu.slots.get(0).getItem().isEmpty()) {
-                    state = State.DONE;
-                    break;
-                }
-                // Backpack-full guard: the crafted count did not move while the
-                // result slot is still occupied — the shift-click cannot take the
-                // result because the inventory is full. Stop after two stalled rounds.
-                if (crafted == lastCrafted && !menu.slots.get(0).getItem().isEmpty()) {
+                // NOTE: the result slot is normally EMPTY here — WAIT_SYNC just
+                // shift-clicked the result away. Material exhaustion is detected
+                // in WAIT_SYNC (placement produced nothing); the only stall left
+                // to guard against here is the crafted count not moving.
+                if (crafted == lastCrafted) {
                     noProgressStreak++;
                     if (noProgressStreak >= 2) {
                         finish("gui.stashlight.message.craftDone");
@@ -292,12 +352,68 @@ public final class CraftExecutor {
             } catch (Exception ignored) {
             }
         }
-        message(doneKey, craftedSoFar, craftTarget);
+        if (backpackLimited) {
+            message("gui.stashlight.message.craftBackpackLimited", craftedSoFar, craftTarget);
+        } else {
+            message(doneKey, craftedSoFar, craftTarget);
+        }
         LOGGER.info("CraftExecutor done: {} of {}", craftedSoFar, craftTarget);
         state = State.IDLE;
         if (Config.get().crafting().keepScreenOnCraft()) {
             restorePendingTicks = 5;
         }
+    }
+
+    private static int freeInventorySlots() {
+        var player = Minecraft.getInstance().player;
+        if (player == null) return 0;
+        int free = 0;
+        var inv = player.getInventory();
+        for (int i = 0; i < 36; i++) {
+            if (inv.getItem(i).isEmpty()) free++;
+        }
+        return free;
+    }
+
+    /** Total free capacity in existing stacks of {@code stack} in the inventory. */
+    private static int mergeRoomFor(ItemStack stack) {
+        var player = Minecraft.getInstance().player;
+        if (player == null) return 0;
+        int room = 0;
+        var inv = player.getInventory();
+        for (int i = 0; i < 36; i++) {
+            var s = inv.getItem(i);
+            if (!s.isEmpty() && ItemStack.isSameItemSameComponents(s, stack)) {
+                room += Math.max(0, s.getMaxStackSize() - s.getCount());
+            }
+        }
+        return room;
+    }
+
+    /**
+     * Throw every inventory stack of {@code stack} onto the ground (THROW the
+     * whole stack per slot) so the freed slots can hold freshly crafted items.
+     * Returns how many stacks were dropped. The items keep their pickup delay,
+     * so they are picked back up once the craft frees up slots.
+     */
+    private static int dropInventoryStacksOf(ItemStack stack) {
+        var mc = Minecraft.getInstance();
+        var player = mc.player;
+        if (player == null || mc.gameMode == null) return 0;
+        var menu = player.containerMenu;
+        if (menu == null) return 0;
+        int dropped = 0;
+        for (int slotIdx = 0; slotIdx < menu.slots.size(); slotIdx++) {
+            var slot = menu.slots.get(slotIdx);
+            if (slot.container != player.getInventory()) continue;
+            if (slot.index >= 36) continue;
+            ItemStack s = slot.getItem();
+            if (s.isEmpty() || !ItemStack.isSameItemSameComponents(s, stack)) continue;
+            mc.gameMode.handleInventoryMouseClick(
+                    menu.containerId, slotIdx, 1, ClickType.THROW, player);
+            dropped++;
+        }
+        return dropped;
     }
 
     private void restoreSearchScreen() {

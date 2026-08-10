@@ -498,7 +498,7 @@ public final class VanillaTaker {
                 mergeRoom += Math.max(0, s.getMaxStackSize() - s.getCount());
             }
         }
-        if (freeSlots + mergeRoom < maxCount) {
+        if (freeSlots * 64 + mergeRoom < maxCount) {
             LOGGER.info("VanillaTaker: limited backpack space for {} of '{}' ({} free slots + {} merge room)",
                     maxCount, target.getHoverName().getString(), freeSlots, mergeRoom);
         }
